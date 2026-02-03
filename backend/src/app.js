@@ -55,9 +55,24 @@ app.use('/api/scoring', scoringRoutes);
 try {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
-  const distPath = path.resolve(__dirname, '../../frontend/dist');
-  const indexPath = path.join(distPath, 'index.html');
-  if (fs.existsSync(indexPath)) {
+  
+  // Try multiple paths to find frontend/dist
+  const possiblePaths = [
+    path.resolve(__dirname, '../../frontend/dist'),  // From backend/src -> root/frontend/dist
+    path.resolve(process.cwd(), 'frontend/dist'),    // From project root
+    path.join(__dirname, '../../frontend/dist'),      // Fallback join
+  ];
+  
+  let distPath = null;
+  for (const p of possiblePaths) {
+    if (fs.existsSync(path.join(p, 'index.html'))) {
+      distPath = p;
+      break;
+    }
+  }
+  
+  if (distPath) {
+    const indexPath = path.join(distPath, 'index.html');
     // eslint-disable-next-line no-console
     console.log('[App] Serving frontend from:', distPath);
     app.use(express.static(distPath));
@@ -66,9 +81,13 @@ try {
       if (req.path === '/health') return next();
       return res.sendFile(indexPath);
     });
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn('[App] Frontend dist folder not found at:', possiblePaths.join(', '));
   }
-} catch {
-  // ignore static serve errors
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('[App] Error serving frontend:', err.message);
 }
 
 // Error handling middleware

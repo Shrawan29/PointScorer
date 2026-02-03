@@ -6,25 +6,36 @@ import { startStatsPollingJob } from './src/jobs/statsPolling.job.js';
 
 const startServer = async () => {
   try {
-    // Connect to MongoDB
-    await mongoose.connect(ENV.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    console.log('Connected to MongoDB');
-
-    // Start server
+    // Start HTTP server immediately so Railway can health-check it,
+    // even if MongoDB is temporarily unavailable.
     app.listen(ENV.PORT, () => {
       console.log(`Server running on port ${ENV.PORT}`);
     });
 
-    // Start background jobs - disabled for debugging
-    try {
-      startMatchPollingJob();
-      startStatsPollingJob();
-    } catch (jobError) {
-      console.error('Failed to start match polling job:', jobError.message);
-      // Don't exit, continue running server without job
-    }
+    let jobsStarted = false;
+    const connectWithRetry = async () => {
+      try {
+        await mongoose.connect(ENV.MONGO_URI, {
+          serverSelectionTimeoutMS: 5000,
+        });
+        console.log('Connected to MongoDB');
+
+        if (!jobsStarted) {
+          try {
+            startMatchPollingJob();
+            startStatsPollingJob();
+            jobsStarted = true;
+          } catch (jobError) {
+            console.error('Failed to start background jobs:', jobError.message);
+          }
+        }
+      } catch (err) {
+        console.error('MongoDB connection failed:', err.message);
+        setTimeout(connectWithRetry, 10_000);
+      }
+    };
+
+    connectWithRetry();
 
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {

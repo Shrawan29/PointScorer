@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import mongoose from 'mongoose';
 import authRoutes from './routes/auth.routes.js';
 import friendRoutes from './routes/friend.routes.js';
 import rulesetRoutes from './routes/ruleset.routes.js';
@@ -19,7 +20,21 @@ app.use(express.json());
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK' });
+  const readyState = mongoose.connection?.readyState;
+  // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  const dbStatus = readyState === 1 ? 'connected' : readyState === 2 ? 'connecting' : 'disconnected';
+  res.status(200).json({ status: 'OK', db: dbStatus });
+});
+
+// If DB isn't connected yet (common on Railway cold starts), fail fast for API calls.
+app.use((req, res, next) => {
+  if (req.path === '/health') return next();
+  if (!String(req.path || '').startsWith('/api/')) return next();
+  const readyState = mongoose.connection?.readyState;
+  if (readyState !== 1) {
+    return res.status(503).json({ message: 'Database not connected yet. Please retry in a few seconds.' });
+  }
+  return next();
 });
 
 // Routes

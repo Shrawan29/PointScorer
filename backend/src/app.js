@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.routes.js';
 import friendRoutes from './routes/friend.routes.js';
 import rulesetRoutes from './routes/ruleset.routes.js';
@@ -47,6 +50,26 @@ app.use('/api/history', historyRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/cricket', cricketRoutes);
 app.use('/api/scoring', scoringRoutes);
+
+// Serve frontend build (single-server deploy) + SPA fallback
+try {
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const distPath = path.resolve(__dirname, '../../frontend/dist');
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    // eslint-disable-next-line no-console
+    console.log('[App] Serving frontend from:', distPath);
+    app.use(express.static(distPath));
+    // Express 5 + path-to-regexp v6: use a RegExp route for SPA fallback.
+    app.get(/^\/(?!api\/).*/, (req, res, next) => {
+      if (req.path === '/health') return next();
+      return res.sendFile(indexPath);
+    });
+  }
+} catch {
+  // ignore static serve errors
+}
 
 // Error handling middleware
 app.use(errorMiddleware);

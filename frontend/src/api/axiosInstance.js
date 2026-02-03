@@ -17,7 +17,15 @@ const normalizeBaseUrl = (value) => {
   return v;
 };
 
-const baseURL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL) || 'http://localhost:5000';
+const envBaseURL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL);
+const hostname = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
+// In dev, frontend runs on 5173 and backend on 5000. Use the current hostname so
+// accessing from another device (LAN IP) works without hardcoding localhost.
+const defaultDevBaseURL = `http://${hostname}:5000`;
+// In prod (or when backend serves the frontend), use same-origin by default.
+const defaultProdBaseURL = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost:5000';
+
+const baseURL = envBaseURL || (import.meta.env.DEV ? defaultDevBaseURL : defaultProdBaseURL);
 
 if (import.meta.env.DEV) {
   // eslint-disable-next-line no-console

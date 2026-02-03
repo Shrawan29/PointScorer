@@ -5,10 +5,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    host: true,
+    strictPort: true,
     middlewareMode: false,
     fs: {
       strict: false,
     },
+  },
+  preview: {
+    port: 5173,
+    host: true,
+    strictPort: true,
   },
   optimizeDeps: {
     include: ['react', 'react-dom', 'react-router-dom', 'axios'],

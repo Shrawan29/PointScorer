@@ -153,14 +153,8 @@ export const FriendDetailPage = () => {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Link to={`/sessions/${s._id}/selection`}>
-                        <Button variant="secondary">Selection</Button>
-                      </Link>
                       <Link to={`/sessions/${s._id}/result`}>
                         <Button variant="secondary">Result</Button>
-                      </Link>
-                      <Link to={`/sessions/${s._id}/share`}>
-                        <Button variant="secondary">Share</Button>
                       </Link>
 						<Button
 							variant="danger"
@@ -190,9 +184,6 @@ export const FriendDetailPage = () => {
                       <div className="text-xs text-slate-500">Pending (not frozen)</div>
                     </div>
                     <div className="flex gap-2">
-                      <Link to={`/sessions/${s._id}/selection`}>
-                        <Button variant="secondary">Open selection</Button>
-                      </Link>
 						<Button
 							variant="danger"
 							disabled={deletingId === String(s._id)}

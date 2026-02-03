@@ -1,0 +1,19 @@
+# dependencies
+**/node_modules/
+
+# builds
+**/dist/
+**/.vite/
+
+# env files (never commit secrets)
+**/.env
+**/.env.*
+!**/.env.example
+
+# logs
+**/*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/

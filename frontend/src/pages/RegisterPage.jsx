@@ -1,0 +1,61 @@
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
+import axiosInstance from '../api/axiosInstance.js';
+import Alert from '../components/Alert.jsx';
+import Button from '../components/Button.jsx';
+import Card from '../components/Card.jsx';
+import FormField from '../components/FormField.jsx';
+
+export const RegisterPage = () => {
+  const navigate = useNavigate();
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      await axiosInstance.post('/api/auth/register', { name, email, password });
+      setSuccess('Account created. Redirecting to login...');
+      setTimeout(() => navigate('/login', { replace: true }), 700);
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="w-full max-w-md">
+        <Card title="Register">
+          <form onSubmit={onSubmit} className="space-y-4">
+            {error && <Alert type="error">{error}</Alert>}
+            {success && <Alert type="success">{success}</Alert>}
+            <FormField label="Name" value={name} onChange={setName} />
+            <FormField label="Email" value={email} onChange={setEmail} type="email" />
+            <FormField label="Password" value={password} onChange={setPassword} type="password" />
+            <Button type="submit" disabled={loading}>
+              {loading ? 'Creating...' : 'Create account'}
+            </Button>
+          </form>
+
+          <div className="text-sm text-slate-600 mt-4">
+            Already have an account? <Link className="text-slate-900 underline" to="/login">Login</Link>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default RegisterPage;

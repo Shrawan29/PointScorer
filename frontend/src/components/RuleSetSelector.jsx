@@ -10,7 +10,7 @@ export const RuleSetSelector = ({ rulesets, value, onChange, disabled }) => {
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
 				disabled={disabled}
-				className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-slate-100"
+				className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
 			>
 				<option value="">Select ruleset</option>
 				{list.map((r) => (

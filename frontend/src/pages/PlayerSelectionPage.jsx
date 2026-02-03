@@ -168,12 +168,12 @@ export const PlayerSelectionPage = () => {
         title="Player Selection"
         subtitle="Once frozen, selection is immutable."
         actions={
-          <div className="flex gap-2">
-            <Link to={`/sessions/${sessionId}/result`}>
-              <Button variant="secondary">Result</Button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Link to={`/sessions/${sessionId}/result`} className="flex-1 sm:flex-none">
+              <Button variant="secondary" fullWidth>Result</Button>
             </Link>
-            <Link to={`/sessions/${sessionId}/share`}>
-              <Button variant="secondary">Share</Button>
+            <Link to={`/sessions/${sessionId}/share`} className="flex-1 sm:flex-none">
+              <Button variant="secondary" fullWidth>Share</Button>
             </Link>
           </div>
         }
@@ -183,15 +183,15 @@ export const PlayerSelectionPage = () => {
       {info && <Alert type="success">{info}</Alert>}
 
       {loading ? (
-        <div className="text-sm text-slate-600">Loading...</div>
+        <div className="text-xs sm:text-sm text-slate-600">Loading...</div>
       ) : (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <Card title="Selected players">
-            <div className="text-sm text-slate-600 mb-2">
+            <div className="text-xs sm:text-sm text-slate-600 mb-2">
               Pick 6–9 players for you and your friend. If Playing XI is available, it will be used.
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col gap-3">
               <div className="flex-1">
                 <div className="text-sm font-medium text-slate-700 mb-1">Search players</div>
                 <input
@@ -199,56 +199,56 @@ export const PlayerSelectionPage = () => {
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search"
                   disabled={isFrozen}
-                  className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-slate-100"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
                 />
                 <div className="mt-3 max-h-64 overflow-auto border rounded-md">
                   {availablePlayers.length === 0 ? (
-                    <div className="p-3 text-sm text-slate-600">No players found.</div>
+                    <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
                   ) : (
                     <div className="divide-y">
                       {availablePlayers.map((p) => {
-									const inUser = userPlayers.includes(p);
-									const inFriend = friendPlayers.includes(p);
-									return (
-										<div key={p} className="p-2 flex items-center justify-between gap-2">
-											<div className="text-sm text-slate-900 truncate">{p}</div>
-											<div className="flex gap-2">
-												<button
-													type="button"
-													disabled={isFrozen || (inFriend && !inUser) || (!inUser && userPlayers.length >= 9)}
-													onClick={() => {
-														setUserPlayers((prev) =>
-															prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-														);
-												}}
-												className={`px-2 py-1 rounded-md text-xs border ${
-													inUser
-														? 'bg-slate-900 text-white border-slate-900'
-														: 'bg-white text-slate-700 border-slate-200'
-												}`}
-											>
-												Me
-											</button>
-											<button
-												type="button"
-												disabled={isFrozen || (inUser && !inFriend) || (!inFriend && friendPlayers.length >= 9)}
-												onClick={() => {
-													setFriendPlayers((prev) =>
-														prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-												);
-											}}
-											className={`px-2 py-1 rounded-md text-xs border ${
-												inFriend
-													? 'bg-emerald-600 text-white border-emerald-600'
-													: 'bg-white text-slate-700 border-slate-200'
-											}`}
-											>
-											Friend
-										</button>
-										</div>
-									</div>
-								);
-							})}
+                        const inUser = userPlayers.includes(p);
+                        const inFriend = friendPlayers.includes(p);
+                        return (
+                          <div key={p} className="p-2 flex items-center justify-between gap-2">
+                            <div className="text-xs sm:text-sm text-slate-900 truncate">{p}</div>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                disabled={isFrozen || (inFriend && !inUser) || (!inUser && userPlayers.length >= 9)}
+                                onClick={() => {
+                                  setUserPlayers((prev) =>
+                                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                                  );
+                                }}
+                                className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                  inUser
+                                    ? 'bg-slate-900 text-white border-slate-900'
+                                    : 'bg-white text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                Me
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isFrozen || (inUser && !inFriend) || (!inFriend && friendPlayers.length >= 9)}
+                                onClick={() => {
+                                  setFriendPlayers((prev) =>
+                                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                                  );
+                                }}
+                                className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                  inFriend
+                                    ? 'bg-slate-900 text-white border-slate-900'
+                                    : 'bg-white text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                Friend
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -257,13 +257,13 @@ export const PlayerSelectionPage = () => {
               <div className="flex-1">
                 <div className="text-sm font-medium text-slate-700">My team ({userPlayers.length}/9)</div>
                 <div className="text-xs text-slate-600 mb-2">Pick 6–9</div>
-                <div className="text-sm text-slate-900 min-h-10">
+                <div className="text-xs sm:text-sm text-slate-900 min-h-10 break-words">
                   {userPlayers.length === 0 ? '—' : userPlayers.join(', ')}
                 </div>
 
                 <div className="mt-3 text-sm font-medium text-slate-700">{friendName} team ({friendPlayers.length}/9)</div>
                 <div className="text-xs text-slate-600 mb-2">Pick 6–9</div>
-                <div className="text-sm text-slate-900 min-h-10">
+                <div className="text-xs sm:text-sm text-slate-900 min-h-10 break-words">
                   {friendPlayers.length === 0 ? '—' : friendPlayers.join(', ')}
                 </div>
               </div>
@@ -271,14 +271,14 @@ export const PlayerSelectionPage = () => {
           </Card>
 
           <Card title="Captains">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 grid-cols-1">
               <label className="block">
                 <div className="text-sm font-medium text-slate-700 mb-1">My captain</div>
                 <select
                   value={userCaptain}
                   onChange={(e) => setUserCaptain(e.target.value)}
                   disabled={isFrozen}
-                  className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-slate-100"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
                 >
                   <option value="">Select captain</option>
                   {userPlayers.map((p) => (
@@ -295,7 +295,7 @@ export const PlayerSelectionPage = () => {
                   value={friendCaptain}
                   onChange={(e) => setFriendCaptain(e.target.value)}
                   disabled={isFrozen}
-                  className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-slate-100"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
                 >
                   <option value="">Select captain</option>
                   {friendPlayers.map((p) => (
@@ -308,11 +308,11 @@ export const PlayerSelectionPage = () => {
             </div>
           </Card>
 
-          <div className="flex gap-2">
-            <Button onClick={onSave} disabled={saving || isFrozen}>
+          <div className="flex flex-col gap-2">
+            <Button onClick={onSave} disabled={saving || isFrozen} fullWidth>
               {saving ? 'Saving...' : selection ? 'Update selection' : 'Create selection'}
             </Button>
-            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection}>
+            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection} fullWidth>
               {freezing ? 'Freezing...' : 'Freeze'}
             </Button>
           </div>

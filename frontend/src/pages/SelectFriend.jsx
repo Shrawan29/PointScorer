@@ -156,16 +156,16 @@ export const SelectFriend = () => {
 			{error && <Alert type="error">{error}</Alert>}
 
 			{loading ? (
-				<div className="text-sm text-slate-600">Loading...</div>
+				<div className="text-xs sm:text-sm text-slate-600">Loading...</div>
 			) : (
-				<div className="grid gap-4">
+				<div className="grid gap-3">
 					<Card title="Select a friend">
 						{friends.length === 0 ? (
-							<div className="text-sm text-slate-600">
+							<div className="text-xs sm:text-sm text-slate-600">
 								No friends yet. <Link className="underline" to="/friends">Create one</Link>.
 							</div>
 						) : (
-							<div className="grid gap-3 sm:grid-cols-2">
+							<div className="grid gap-2 grid-cols-1">
 								{friends.map((f) => (
 									<FriendCard
 										key={f._id}
@@ -180,11 +180,11 @@ export const SelectFriend = () => {
 
 					<Card title="Select ruleset">
 						{!selectedFriendId ? (
-							<div className="text-sm text-slate-600">Select a friend to load rulesets.</div>
+							<div className="text-xs sm:text-sm text-slate-600">Select a friend to load rulesets.</div>
 						) : loadingRulesets ? (
-							<div className="text-sm text-slate-600">Loading rulesets...</div>
+							<div className="text-xs sm:text-sm text-slate-600">Loading rulesets...</div>
 						) : rulesets.length === 0 ? (
-							<div className="text-sm text-slate-600">
+							<div className="text-xs sm:text-sm text-slate-600">
 								No rulesets for this friend.{' '}
 								<Link className="underline" to={`/friends/${selectedFriendId}/rulesets/new`}>
 									Create one
@@ -200,12 +200,12 @@ export const SelectFriend = () => {
 						)}
 					</Card>
 
-					<div className="flex flex-col sm:flex-row gap-2">
-						<Button onClick={onCreate} disabled={!canCreate || creating}>
+					<div className="flex flex-col gap-2">
+						<Button onClick={onCreate} disabled={!canCreate || creating} fullWidth>
 							{creating ? 'Creating session...' : 'Confirm & Start'}
 						</Button>
-						<Link to="/dashboard">
-							<Button variant="secondary">Cancel</Button>
+						<Link to="/dashboard" className="w-full">
+							<Button variant="secondary" fullWidth>Cancel</Button>
 						</Link>
 					</div>
 				</div>

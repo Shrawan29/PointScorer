@@ -10,7 +10,7 @@ export const FormField = ({ label, value, onChange, type = 'text', placeholder, 
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="w-full px-3 py-2 border rounded-md bg-white disabled:bg-slate-100"
+        className="w-full px-3 py-2.5 border rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300"
       />
     </label>
   );

@@ -151,15 +151,15 @@ export const ResultPage = () => {
         title="Match Result"
         subtitle={data?.match?.realMatchName || ''}
         actions={
-          <div className="flex gap-2">
-            <Link to={`/sessions/${sessionId}/breakdown`}>
-              <Button variant="secondary">Breakdown</Button>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Link to={`/sessions/${sessionId}/breakdown`} className="flex-1 sm:flex-none">
+              <Button variant="secondary" fullWidth>Breakdown</Button>
             </Link>
-            <Link to={`/sessions/${sessionId}/share`}>
-              <Button variant="secondary">WhatsApp Share</Button>
+            <Link to={`/sessions/${sessionId}/share`} className="flex-1 sm:flex-none">
+              <Button variant="secondary" fullWidth>Share</Button>
             </Link>
-            <Link to={`/sessions/${sessionId}/selection`}>
-              <Button variant="secondary">Selection</Button>
+            <Link to={`/sessions/${sessionId}/selection`} className="flex-1 sm:flex-none">
+              <Button variant="secondary" fullWidth>Selection</Button>
             </Link>
           </div>
         }
@@ -168,17 +168,17 @@ export const ResultPage = () => {
       {error && <Alert type="error">{error}</Alert>}
 
       {loading ? (
-        <div className="text-sm text-slate-600">Loading...</div>
+        <div className="text-xs sm:text-sm text-slate-600">Loading...</div>
       ) : !data ? null : (
-        <div className="grid gap-4">
+        <div className="grid gap-3">
           <Card title="Summary">
-          <div className="text-sm text-slate-700">{userDisplayName} captain: {userCaptain || 'N/A'}</div>
-          <div className="text-sm text-slate-700">{friendDisplayName} captain: {friendCaptain || 'N/A'}</div>
-          <div className="text-sm text-slate-700 mt-1">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
-          <div className="text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
-      <div className="text-sm text-slate-700 mt-1">Total points: {data.totalPoints ?? 0}</div>
+          <div className="text-xs sm:text-sm text-slate-700">{userDisplayName} captain: {userCaptain || 'N/A'}</div>
+          <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} captain: {friendCaptain || 'N/A'}</div>
+          <div className="text-xs sm:text-sm text-slate-700 mt-1">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
+          <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
+      <div className="text-xs sm:text-sm text-slate-700 mt-1">Total points: {data.totalPoints ?? 0}</div>
 
-      <div className="text-sm mt-2">
+      <div className="text-xs sm:text-sm mt-2">
         <span className="text-slate-700">Last refreshed: </span>
         <span className={refreshMeta?.lastRefreshedAt ? 'text-slate-700' : 'text-slate-500'}>
           {refreshMeta?.lastRefreshedAt
@@ -191,7 +191,7 @@ export const ResultPage = () => {
       </div>
 
       {refreshMeta?.scorecardState || refreshMeta?.scorecardStatus ? (
-        <div className="text-sm text-slate-600">
+        <div className="text-xs sm:text-sm text-slate-600">
           <span>Scorecard: </span>
           <span>
             {refreshMeta?.scorecardState ? String(refreshMeta.scorecardState) : '—'}
@@ -201,7 +201,7 @@ export const ResultPage = () => {
       ) : null}
 
       {typeof refreshMeta?.matchedCount === 'number' || typeof refreshMeta?.nonZeroCount === 'number' ? (
-        <div className="text-sm text-slate-600">
+        <div className="text-xs sm:text-sm text-slate-600">
           <span>Matched players: </span>
           <span>{typeof refreshMeta?.matchedCount === 'number' ? refreshMeta.matchedCount : '—'}</span>
           <span> • Non-zero stats: </span>
@@ -210,11 +210,11 @@ export const ResultPage = () => {
       ) : null}
 
       {Array.isArray(refreshMeta?.unmatchedPlayers) && refreshMeta.unmatchedPlayers.length > 0 ? (
-        <div className="text-sm text-amber-700">
+        <div className="text-xs sm:text-sm text-amber-700">
           Some selected players were not found in the scorecard yet ({refreshMeta.unmatchedPlayers.length}).
         </div>
       ) : null}
-      <div className="text-sm break-all">
+      <div className="text-xs sm:text-sm break-all">
         <span className="text-slate-700">Scorecard source: </span>
         {refreshMeta?.sourceUrl ? (
           <a
@@ -230,21 +230,21 @@ export const ResultPage = () => {
         )}
       </div>
       {!friendTeamSelected ? (
-        <div className="mt-2 text-sm text-amber-700">
+        <div className="mt-2 text-xs sm:text-sm text-amber-700">
           Friend team is not selected for this session. Go to Selection and pick friend players + captain,
           then Save and Freeze.
         </div>
       ) : null}
       {canAttemptFix ? (
-        <div className="mt-3">
-          <Button variant="secondary" onClick={onFixFriendPoints} disabled={fixing}>
+        <div className="mt-3 flex gap-2">
+          <Button variant="secondary" onClick={onFixFriendPoints} disabled={fixing} fullWidth>
             {fixing ? 'Fixing…' : 'Fix friend points'}
           </Button>
         </div>
       ) : null}
       {canRefresh ? (
-        <div className="mt-3">
-          <Button onClick={onRefreshStats} disabled={refreshing}>
+        <div className="mt-3 flex gap-2">
+          <Button onClick={onRefreshStats} disabled={refreshing} fullWidth>
             {refreshing ? 'Refreshing…' : 'Refresh stats & recalc'}
           </Button>
         </div>
@@ -253,7 +253,7 @@ export const ResultPage = () => {
 
       <Card title={`${userDisplayName} player points`}>
         {userRows.length === 0 ? (
-          <div className="text-sm text-slate-600">No points found.</div>
+          <div className="text-xs sm:text-sm text-slate-600">No points found.</div>
         ) : (
           <div className="grid gap-2">
             {userRows
@@ -262,7 +262,7 @@ export const ResultPage = () => {
               .map((r) => {
                 const isCaptain = userCaptain && String(r.playerId) === String(userCaptain);
                 return (
-                  <div key={r._id} className="flex items-center justify-between">
+                  <div key={r._id} className="flex items-center justify-between text-xs sm:text-sm">
                     <div className="font-medium text-slate-900">
                       {r.playerId}
                       {isCaptain ? <span className="text-xs text-slate-600"> (Captain)</span> : null}

@@ -60,9 +60,6 @@ export const FriendDetailPage = () => {
             <Link to={`/friends/${friendId}/rulesets`}>
               <Button variant="secondary">Rulesets</Button>
             </Link>
-            <Link to={`/friends/${friendId}/matches/new`}>
-              <Button>Create Match Session</Button>
-            </Link>
           </div>
         }
       />

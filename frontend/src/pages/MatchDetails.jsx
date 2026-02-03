@@ -88,36 +88,36 @@ export const MatchDetails = () => {
 			{error && <Alert type="error">{error}</Alert>}
 
 			{loading ? (
-				<div className="text-sm text-slate-600">Loading...</div>
+				<div className="text-xs sm:text-sm text-slate-600">Loading...</div>
 			) : !match ? (
 				<Card title="Match">
-					<div className="text-sm text-slate-600">Match not found.</div>
+					<div className="text-xs sm:text-sm text-slate-600">Match not found.</div>
 				</Card>
 			) : (
-				<div className="grid gap-4">
+				<div className="grid gap-3">
 					<Card title="Overview">
 						<div className="grid gap-2 text-sm">
 							<div>
 								<span className="text-slate-600">Teams:</span>{' '}
-								<span className="text-slate-900">{teamsText || '—'}</span>
+								<span className="text-slate-900 text-xs sm:text-sm break-words">{teamsText || '—'}</span>
 							</div>
 							<div>
 								<span className="text-slate-600">Match type:</span>{' '}
-								<span className="text-slate-900">{match?.matchType || '—'}</span>
+								<span className="text-slate-900 text-xs sm:text-sm">{match?.matchType || '—'}</span>
 							</div>
 							<div>
 								<span className="text-slate-600">Start time:</span>{' '}
-								<span className="text-slate-900">{startTimeText}</span>
+								<span className="text-slate-900 text-xs sm:text-sm">{startTimeText}</span>
 							</div>
 							<div>
 								<span className="text-slate-600">Venue:</span>{' '}
-								<span className="text-slate-900">{match?.venue || '—'}</span>
+								<span className="text-slate-900 text-xs sm:text-sm break-words">{match?.venue || '—'}</span>
 							</div>
 						</div>
 					</Card>
 
-					<div className="flex flex-col sm:flex-row gap-2">
-						<Button onClick={() => navigate(`/select-friend/${matchId}`)}>
+					<div className="flex gap-2">
+						<Button onClick={() => navigate(`/select-friend/${matchId}`)} fullWidth>
 							Play this Match
 						</Button>
 					</div>

@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const Alert = ({ type = 'info', children }) => {
-  const base = 'border rounded-md p-3 text-sm';
+  const base = 'border rounded-md p-3 text-xs sm:text-sm';
   const styles =
     type === 'error'
       ? 'bg-red-50 border-red-200 text-red-800'

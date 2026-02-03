@@ -40,22 +40,26 @@ export const MatchCard = ({ match }) => {
 	const startTime = formatStartTime(match?.startTime);
 
 	return (
-		<div className="bg-white border rounded-lg p-4 hover:border-slate-300 transition-colors">
+		<div>
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0">
-					<div className="font-semibold text-slate-900 truncate">{matchName}</div>
-					<div className="text-sm text-slate-600 mt-1 truncate">{teamsText || '—'}</div>
+					<div className="font-semibold text-slate-900 text-sm sm:text-base leading-snug break-words">
+						{matchName}
+					</div>
+					<div className="text-xs sm:text-sm text-slate-600 mt-1 leading-snug break-words">
+						{teamsText || '—'}
+					</div>
 				</div>
 				<div className={`shrink-0 px-2 py-1 rounded-md text-xs border ${statusBadgeClass(matchStatus)}`}>
 					{String(matchStatus).toUpperCase()}
 				</div>
 			</div>
 
-			<div className="mt-3 flex flex-wrap items-center gap-2">
+			<div className="mt-2 flex flex-wrap items-center gap-2">
 				<span className="px-2 py-1 rounded-md text-xs border bg-slate-50 text-slate-700 border-slate-200">
-					{matchType}
+					Format: {matchType}
 				</span>
-				<span className="text-xs text-slate-600">Start: {startTime}</span>
+				<span className="text-xs text-slate-500">Start: {startTime}</span>
 			</div>
 		</div>
 	);

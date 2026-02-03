@@ -6,17 +6,26 @@ export const Button = ({
   type = 'button',
   variant = 'primary',
   disabled,
+  fullWidth = false,
 }) => {
-  const base = 'px-3 py-2 rounded-md text-sm border disabled:opacity-60';
-  const styles =
+  const baseClasses = 'px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors';
+  const widthClass = fullWidth ? 'w-full' : '';
+  const variantClasses =
     variant === 'primary'
-      ? 'bg-slate-900 text-white border-slate-900 hover:bg-slate-800'
-      : variant === 'danger'
-        ? 'bg-white text-red-700 border-red-200 hover:bg-red-50'
-        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50';
+      ? 'bg-slate-900 text-white hover:bg-slate-800'
+      : variant === 'secondary'
+        ? 'bg-slate-100 text-slate-900 hover:bg-slate-200'
+        : variant === 'danger'
+          ? 'bg-red-600 text-white hover:bg-red-700'
+          : 'bg-white text-slate-700 border border-slate-300 hover:bg-slate-50';
 
   return (
-    <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles}`}>
+    <button 
+      type={type} 
+      onClick={onClick} 
+      disabled={disabled} 
+      className={`${baseClasses} ${widthClass} ${variantClasses}`}
+    >
       {children}
     </button>
   );

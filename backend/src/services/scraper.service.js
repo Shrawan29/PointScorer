@@ -3,8 +3,10 @@ import cheerio from 'cheerio';
 
 const SCRAPER_TIMEOUT_MS = Number(process.env.SCRAPER_TIMEOUT_MS || 15000);
 const SCRAPER_DELAY_MS = Number(process.env.SCRAPER_DELAY_MS || 3000);
+const MATCH_LIST_SCRAPER_DELAY_MS = Number(process.env.MATCH_LIST_SCRAPER_DELAY_MS || 250);
 
 const MATCH_LIST_CACHE_TTL_MS = Number(process.env.MATCH_LIST_CACHE_TTL_MS || 60_000);
+const MATCH_FORMAT_CACHE_TTL_MS = Number(process.env.MATCH_FORMAT_CACHE_TTL_MS || 6 * 60 * 60_000);
 const SQUADS_CACHE_TTL_MS = Number(process.env.SQUADS_CACHE_TTL_MS || 5 * 60_000);
 const SCORECARD_STATS_CACHE_TTL_MS = Number(process.env.SCORECARD_STATS_CACHE_TTL_MS || 60_000);
 
@@ -28,6 +30,7 @@ const matchListCache = {
 
 const squadsCache = new Map();
 const scorecardStatsCache = new Map();
+const matchFormatCache = new Map();
 
 /**
  * Safely fetch HTML page with debug logging
@@ -62,6 +65,21 @@ const fetchPage = async (url, label = 'fetch') => {
 };
 
 const normalizeWhitespace = (text) => String(text || '').replace(/\s+/g, ' ').trim();
+
+const getCachedMatchFormat = (url) => {
+	const entry = matchFormatCache.get(url);
+	if (!entry) return null;
+	if (Date.now() - entry.ts > MATCH_FORMAT_CACHE_TTL_MS) {
+		matchFormatCache.delete(url);
+		return null;
+	}
+	return entry.format || null;
+};
+
+const setCachedMatchFormat = (url, format) => {
+	if (!url || !format) return;
+	matchFormatCache.set(url, { ts: Date.now(), format });
+};
 
 const absoluteCricbuzzUrl = (href) => {
 	if (!href) return null;
@@ -569,6 +587,7 @@ const parseMatchCard = ($a) => {
 		team2,
 		matchStatus,
 		startTimeText,
+		contextText,
 		rawText,
 	};
 };
@@ -579,11 +598,102 @@ const parseMatchCard = ($a) => {
 const parseMatchType = (text) => {
 	if (!text) return null;
 	const t = String(text).toUpperCase();
-	if (t.includes('T20')) return 'T20';
+	if (t.includes('TWENTY20')) return 'T20';
+	if (t.includes('T20') || t.includes('T20I')) return 'T20';
+	if (t.includes('T10')) return 'T20';
+	if (t.includes('100 BALL') || t.includes('THE HUNDRED')) return 'T20';
+	if (t.includes('LIST A')) return 'ODI';
+	if (t.includes('ONE DAY') || t.includes('ONE-DAY') || t.includes('50 OVER') || t.includes('50-OVER')) return 'ODI';
 	if (t.includes('ODI')) return 'ODI';
+	if (t.includes('FIRST CLASS') || /\bFC\b/.test(t) || t.includes('4 DAY') || t.includes('5 DAY')) return 'TEST';
 	if (t.includes('TEST')) return 'TEST';
 	if (t.includes('INTERNATIONAL')) return 'ODI'; // Default assumption
 	return null;
+};
+
+const extractFormatFromHtml = (html) => {
+	if (!html) return null;
+	const upper = String(html).toUpperCase();
+	// Look for explicit JSON keys first (from scripts/embedded data)
+	const jsonKeyMatch = upper.match(/"MATCHTYPE"\s*:\s*"(T20I?|ODI|TEST)"/i)
+		|| upper.match(/"MATCHFORMAT"\s*:\s*"(T20I?|ODI|TEST)"/i)
+		|| upper.match(/"FORMAT"\s*:\s*"(T20I?|ODI|TEST)"/i);
+	if (jsonKeyMatch?.[1]) return parseMatchType(jsonKeyMatch[1]);
+
+	// Look for labels in HTML text
+	const labelMatch = upper.match(/MATCH\s*TYPE\s*[:\-]?\s*(T20I?|ODI|TEST)/i)
+		|| upper.match(/FORMAT\s*[:\-]?\s*(T20I?|ODI|TEST)/i);
+	if (labelMatch?.[1]) return parseMatchType(labelMatch[1]);
+
+	// Fallback: find nearby phrases in title/meta/body
+	const anyMatch = upper.match(/\b(T20I?|ODI|TEST)\b/);
+	if (anyMatch?.[1]) return parseMatchType(anyMatch[1]);
+
+	return null;
+};
+
+const scrapeMatchFormatFromCricbuzz = async (matchUrl) => {
+	if (!matchUrl) return null;
+	const url = absoluteCricbuzzUrl(matchUrl);
+	const cached = getCachedMatchFormat(url);
+	if (cached) return cached;
+
+	const html = await fetchPage(url, 'cricbuzz_match_format');
+	if (!html) return null;
+
+	// Prefer extracting the format for THIS matchId (avoids false positives from other
+	// matches/formats embedded in the same page).
+	try {
+		const idMatch = String(url).match(/\/live-cricket-scores\/(\d+)\//);
+		const matchId = idMatch?.[1] ? String(idMatch[1]) : null;
+		if (matchId) {
+			const scan = String(html).replace(/\\"/g, '"');
+			const re = new RegExp(`"matchId"\\s*:\\s*${matchId}[\\s\\S]{0,700}?"matchFormat"\\s*:\\s*"(T20I?|ODI|TEST)"`, 'i');
+			const m = scan.match(re);
+			if (m?.[1]) {
+				const fmt = parseMatchType(m[1]);
+				if (fmt) {
+					setCachedMatchFormat(url, fmt);
+					return fmt;
+				}
+			}
+		}
+	} catch {
+		// ignore
+	}
+
+	const $ = cheerio.load(html);
+	const titleText = normalizeWhitespace($('title').text());
+	const metaDesc = normalizeWhitespace($('meta[name="description"]').attr('content'));
+	const ogDesc = normalizeWhitespace($('meta[property="og:description"]').attr('content'));
+	const labelText = normalizeWhitespace(
+		$('*:contains("Match Type"), *:contains("Format"), *:contains("Match format")')
+			.first()
+			.parent()
+			.text(),
+	);
+	const bodyText = normalizeWhitespace($('body').text());
+	const combined = `${titleText} ${metaDesc} ${ogDesc} ${labelText} ${bodyText}`;
+	const format = extractFormatFromHtml(html) || parseMatchType(combined);
+	if (format) setCachedMatchFormat(url, format);
+	return format;
+};
+
+const enrichMatchesWithFormat = async (matches, options = {}) => {
+	const list = Array.isArray(matches) ? matches : [];
+	const max = Number(options.max || 6);
+	const delayMs = Number(options.delayMs || 200);
+	let processed = 0;
+	for (const match of list) {
+		if (processed >= max) break;
+		if (match?.matchType || !match?.matchUrl) continue;
+		// Throttle a bit to avoid hammering
+		await delay(delayMs);
+		const format = await scrapeMatchFormatFromCricbuzz(match.matchUrl);
+		if (format) match.matchType = format;
+		processed += 1;
+	}
+	return list;
 };
 
 /**
@@ -630,7 +740,7 @@ export const scrapeLiveAndTodayMatches = async () => {
 			return matchListCache.liveToday.data;
 		}
 
-		await delay(SCRAPER_DELAY_MS);
+		await delay(MATCH_LIST_SCRAPER_DELAY_MS);
 
 		console.log('[Scraper] ====== Cricbuzz LIVE/TODAY matches ======');
 		const url = 'https://www.cricbuzz.com/cricket-match/live-scores';
@@ -641,6 +751,20 @@ export const scrapeLiveAndTodayMatches = async () => {
 		}
 
 		const $ = cheerio.load(html);
+		// Cricbuzz pages often embed a JSON blob that includes matchFormat per matchId.
+		// Extract those formats up-front so we can enrich results without extra requests.
+		const formatByMatchId = new Map();
+		try {
+			const scan = String(html).replace(/\\"/g, '"');
+			const re = /"matchId"\s*:\s*(\d+)[\s\S]{0,700}?"matchFormat"\s*:\s*"(T20I?|ODI|TEST)"/gi;
+			let m;
+			while ((m = re.exec(scan)) !== null) {
+				const fmt = parseMatchType(m[2]);
+				if (fmt) formatByMatchId.set(String(m[1]), fmt);
+			}
+		} catch {
+			// ignore
+		}
 		const anchorsDsTypo = $('a.ds-no-tap-higlight');
 		const anchorsDs = $('a.ds-no-tap-highlight');
 		const anchorsHref = $('a[href*="/live-cricket-scores/"], a[href*="/live-cricket-score"]');
@@ -664,13 +788,20 @@ export const scrapeLiveAndTodayMatches = async () => {
 			const parsed = parseMatchCard($a);
 			if (!parsed?.matchUrl) return;
 			if (!parsed?.rawText || parsed.rawText.length < 3) return;
+			const matchId = extractMatchIdFromUrl(parsed.matchUrl);
+			const matchFormatFromPage = matchId ? formatByMatchId.get(String(matchId)) : null;
+			const matchType =
+				parseMatchType(parsed.contextText || parsed.matchName || parsed.rawText) ||
+				parseMatchType(parsed.matchUrl) ||
+				parseMatchType(matchFormatFromPage);
 			matches.push({
 				matchUrl: parsed.matchUrl,
 				matchName: parsed.matchName,
 				team1: parsed.team1,
 				team2: parsed.team2,
+				matchType,
 				matchStatus: parsed.matchStatus,
-				rawText: parsed.rawText,
+				rawText: parsed.contextText || parsed.rawText,
 			});
 		});
 
@@ -678,6 +809,15 @@ export const scrapeLiveAndTodayMatches = async () => {
 			console.warn('No matches found — DOM may have changed');
 			return [];
 		}
+
+		// Fill formats from cache immediately (fast path)
+		for (const m of matches) {
+			if (m?.matchType) continue;
+			const cachedFormat = m?.matchUrl ? getCachedMatchFormat(m.matchUrl) : null;
+			if (cachedFormat) m.matchType = cachedFormat;
+		}
+
+		void enrichMatchesWithFormat(matches, { max: 8, delayMs: 150 });
 
 		console.log('[Scraper] First match object:', matches[0]);
 		matchListCache.liveToday = { ts: Date.now(), data: matches };
@@ -703,7 +843,7 @@ export const scrapeUpcomingMatches = async () => {
 			return matchListCache.upcoming.data;
 		}
 
-		await delay(SCRAPER_DELAY_MS);
+		await delay(MATCH_LIST_SCRAPER_DELAY_MS);
 
 		console.log('[Scraper] ====== Cricbuzz UPCOMING matches ======');
 		const mandatedUrl = 'https://www.cricbuzz.com/cricket-schedule/upcoming-series';
@@ -722,6 +862,19 @@ export const scrapeUpcomingMatches = async () => {
 		}
 
 		const $ = cheerio.load(html);
+		// Upcoming schedule pages can also embed matchFormat keyed by matchId.
+		const formatByMatchId = new Map();
+		try {
+			const scan = String(html).replace(/\\"/g, '"');
+			const re = /"matchId"\s*:\s*(\d+)[\s\S]{0,700}?"matchFormat"\s*:\s*"(T20I?|ODI|TEST)"/gi;
+			let m;
+			while ((m = re.exec(scan)) !== null) {
+				const fmt = parseMatchType(m[2]);
+				if (fmt) formatByMatchId.set(String(m[1]), fmt);
+			}
+		} catch {
+			// ignore
+		}
 		// Per requirement: select match anchors (use ds anchor when present, otherwise fall back to match links)
 		const anchorsDsTypo = $('a.ds-no-tap-higlight');
 		const anchorsDs = $('a.ds-no-tap-highlight');
@@ -738,6 +891,12 @@ export const scrapeUpcomingMatches = async () => {
 			const parsed = parseMatchCard($a);
 			if (!parsed?.matchUrl) return;
 			if (!parsed?.rawText || parsed.rawText.length < 3) return;
+			const matchId = extractMatchIdFromUrl(parsed.matchUrl);
+			const matchFormatFromPage = matchId ? formatByMatchId.get(String(matchId)) : null;
+			const matchType =
+				parseMatchType(parsed.contextText || parsed.matchName || parsed.rawText) ||
+				parseMatchType(parsed.matchUrl) ||
+				parseMatchType(matchFormatFromPage);
 
 			// Upcoming filter: prefer previews / not-started matches.
 			const t = parsed.rawText.toLowerCase();
@@ -750,9 +909,10 @@ export const scrapeUpcomingMatches = async () => {
 				matchName: parsed.matchName,
 				team1: parsed.team1,
 				team2: parsed.team2,
+				matchType,
 				matchStatus: 'UPCOMING',
 				startTimeText: parsed.startTimeText,
-				rawText: parsed.rawText,
+				rawText: parsed.contextText || parsed.rawText,
 			});
 		});
 
@@ -760,6 +920,15 @@ export const scrapeUpcomingMatches = async () => {
 			console.warn('No matches found — DOM may have changed');
 			return [];
 		}
+
+		// Fill formats from cache immediately (fast path)
+		for (const m of matches) {
+			if (m?.matchType) continue;
+			const cachedFormat = m?.matchUrl ? getCachedMatchFormat(m.matchUrl) : null;
+			if (cachedFormat) m.matchType = cachedFormat;
+		}
+
+		void enrichMatchesWithFormat(matches, { max: 8, delayMs: 150 });
 
 		console.log('[Scraper] First match object:', matches[0]);
 		matchListCache.upcoming = { ts: Date.now(), data: matches };
@@ -872,6 +1041,12 @@ export const scrapeMatchDetails = async (matchUrl) => {
 		const statusText = $('[class*="status"], [class*="state"]').text()?.trim() || null;
 
 		const { team1, team2 } = parseTeams(matchName);
+		const inferredType = parseMatchType(matchName);
+		let resolvedType = inferredType;
+		// Cricbuzz commentary/title strings often omit the format; fall back to embedded matchFormat.
+		if (!resolvedType && url.includes('cricbuzz.com')) {
+			resolvedType = await scrapeMatchFormatFromCricbuzz(url);
+		}
 
 		const details = {
 			matchUrl: url,
@@ -881,7 +1056,7 @@ export const scrapeMatchDetails = async (matchUrl) => {
 				{ name: team2, shortName: null },
 			].filter((t) => t.name),
 			venue: venueText || null,
-			matchType: parseMatchType(matchName),
+			matchType: resolvedType,
 			matchStatus: parseMatchStatus(statusText),
 			startTime: null,
 		};

@@ -18,6 +18,7 @@ export const FriendDetailPage = () => {
   const [showPending, setShowPending] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+	const [deletingId, setDeletingId] = useState('');
 
   const friendName = useMemo(() => friend?.friendName || friendId, [friend, friendId]);
 
@@ -49,6 +50,24 @@ export const FriendDetailPage = () => {
     run();
 	// Re-run when navigating away/back so frozen status updates in UI.
   }, [friendId, location.key]);
+
+  const onDeleteSession = async (session) => {
+    const sessionId = session?._id;
+    if (!sessionId) return;
+    const name = session?.realMatchName || 'this match session';
+    const ok = window.confirm(`Delete "${name}"? This will remove the session, selections, and results.`);
+    if (!ok) return;
+    setError('');
+    setDeletingId(String(sessionId));
+    try {
+      await axiosInstance.delete(`/api/matches/session/${sessionId}`);
+      setSessions((prev) => (prev || []).filter((s) => String(s?._id) !== String(sessionId)));
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to delete match session');
+    } finally {
+      setDeletingId('');
+    }
+  };
 
   return (
     <Layout>
@@ -143,6 +162,13 @@ export const FriendDetailPage = () => {
                       <Link to={`/sessions/${s._id}/share`}>
                         <Button variant="secondary">Share</Button>
                       </Link>
+						<Button
+							variant="danger"
+							disabled={deletingId === String(s._id)}
+							onClick={() => onDeleteSession(s)}
+						>
+							{deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
+						</Button>
                     </div>
                   </div>
                 ))}
@@ -167,6 +193,13 @@ export const FriendDetailPage = () => {
                       <Link to={`/sessions/${s._id}/selection`}>
                         <Button variant="secondary">Open selection</Button>
                       </Link>
+						<Button
+							variant="danger"
+							disabled={deletingId === String(s._id)}
+							onClick={() => onDeleteSession(s)}
+						>
+							{deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
+						</Button>
                     </div>
                   </div>
                 ))}

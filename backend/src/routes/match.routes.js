@@ -7,6 +7,7 @@ import {
 	getMatchSessionById,
 	getMatchSessionsByFriend,
 	getMatchSessionsByRuleSet,
+	deleteMatchSession,
 } from '../controllers/match.controller.js';
 import authMiddleware from '../middlewares/auth.middleware.js';
 
@@ -17,6 +18,7 @@ router.use(authMiddleware);
 router.get('/', getMatches);
 router.post('/', createMatchSession);
 router.get('/session/:sessionId', getMatchSessionById);
+router.delete('/session/:sessionId', deleteMatchSession);
 router.get('/friend/:friendId', getMatchSessionsByFriend);
 router.get('/ruleset/:rulesetId', getMatchSessionsByRuleSet);
 router.get('/:matchId', getMatchById);

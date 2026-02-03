@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import Friend from '../models/Friend.model.js';
 import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
+import PointsBreakdown from '../models/PointsBreakdown.model.js';
+import RawPlayerStats from '../models/RawPlayerStats.model.js';
 import RuleSet from '../models/RuleSet.model.js';
 import { scrapeTodayAndLiveMatches, scrapeUpcomingMatches, scrapeMatchDetails } from '../services/scraper.service.js';
 
@@ -221,6 +223,34 @@ export const getMatchSessionById = async (req, res, next) => {
 	}
 };
 
+export const deleteMatchSession = async (req, res, next) => {
+	try {
+		const { sessionId } = req.params;
+		if (!sessionId) {
+			return res.status(400).json({ message: 'sessionId is required' });
+		}
+		if (!mongoose.Types.ObjectId.isValid(sessionId)) {
+			return res.status(400).json({ message: 'Invalid sessionId' });
+		}
+
+		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId }).lean();
+		if (!session) {
+			return res.status(404).json({ message: 'MatchSession not found' });
+		}
+
+		await Promise.all([
+			PlayerSelection.deleteMany({ sessionId }),
+			PointsBreakdown.deleteMany({ sessionId }),
+			RawPlayerStats.deleteMany({ sessionId }),
+			MatchSession.deleteOne({ _id: sessionId, userId: req.userId }),
+		]);
+
+		return res.status(200).json({ ok: true });
+	} catch (error) {
+		next(error);
+	}
+};
+
 export default {
 	getMatches,
 	getMatchById,
@@ -228,4 +258,5 @@ export default {
 	getMatchSessionsByFriend,
 	getMatchSessionsByRuleSet,
 	getMatchSessionById,
+	deleteMatchSession,
 };

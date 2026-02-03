@@ -8,9 +8,12 @@ const startServer = async () => {
   try {
     // Start HTTP server immediately so Railway can health-check it,
     // even if MongoDB is temporarily unavailable.
-    app.listen(ENV.PORT, () => {
-      console.log(`Server running on port ${ENV.PORT}`);
-    });
+	const port = ENV.PORT;
+	const host = process.env.HOST || '0.0.0.0';
+	app.listen(port, host, () => {
+		console.log(`Server running on ${host}:${port}`);
+		console.log(`[Env] PORT=${process.env.PORT || ''} HOST=${process.env.HOST || ''}`);
+	});
 
     let jobsStarted = false;
     const connectWithRetry = async () => {

@@ -17,6 +17,16 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+
+    // Single active session enforcement
+    activeSessionId: {
+      type: String,
+      default: null,
+    },
+    activeSessionExpiresAt: {
+      type: Date,
+      default: null,
+    },
   },
   { timestamps: true }
 );

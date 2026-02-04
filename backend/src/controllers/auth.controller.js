@@ -1,7 +1,25 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import User from '../models/User.model.js';
 import ENV from '../config/env.js';
+
+const parseExpiresInMs = (value) => {
+  // Supports jsonwebtoken-style short strings like '7d', '12h', '30m', '15s'
+  if (typeof value === 'number' && Number.isFinite(value)) return value * 1000;
+  const v = String(value || '').trim();
+  const m = v.match(/^([0-9]+)\s*([smhd])$/i);
+  if (!m) return 7 * 24 * 60 * 60 * 1000;
+  const n = Number(m[1]);
+  const unit = m[2].toLowerCase();
+  const mult = unit === 's' ? 1000 : unit === 'm' ? 60_000 : unit === 'h' ? 3_600_000 : 86_400_000;
+  return n * mult;
+};
+
+const newSessionId = () => {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return crypto.randomBytes(16).toString('hex');
+};
 
 export const register = async (req, res, next) => {
   try {
@@ -57,8 +75,23 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Enforce one active session at a time
+    const now = new Date();
+    if (user.activeSessionId && user.activeSessionExpiresAt && user.activeSessionExpiresAt > now) {
+      return res.status(409).json({
+        message:
+          'You are already logged in on another device. Please logout there or wait for the session to expire.',
+      });
+    }
+
+    const sessionId = newSessionId();
+    const expiresAt = new Date(Date.now() + parseExpiresInMs(ENV.JWT_EXPIRES_IN));
+    user.activeSessionId = sessionId;
+    user.activeSessionExpiresAt = expiresAt;
+    await user.save();
+
     // Generate JWT
-    const token = jwt.sign({ userId: user._id }, ENV.JWT_SECRET, {
+    const token = jwt.sign({ userId: user._id, sessionId }, ENV.JWT_SECRET, {
       expiresIn: ENV.JWT_EXPIRES_IN,
     });
 
@@ -76,4 +109,19 @@ export const login = async (req, res, next) => {
   }
 };
 
-export default { register, login };
+export const logout = async (req, res, next) => {
+	try {
+		const userId = req.userId;
+		if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+		await User.updateOne(
+			{ _id: userId },
+			{ $set: { activeSessionId: null, activeSessionExpiresAt: null } }
+		);
+		return res.status(200).json({ ok: true });
+	} catch (error) {
+		next(error);
+	}
+};
+
+export default { register, login, logout };

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axiosInstance from '../api/axiosInstance.js';
 
 const AuthContext = createContext(null);
 
@@ -23,7 +24,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('user', JSON.stringify(nextUser));
   };
 
-  const logout = () => {
+  const logout = async () => {
+    // Best-effort server-side logout to free the single active session.
+    try {
+      await axiosInstance.post('/api/auth/logout');
+    } catch {
+      // ignore
+    }
+
     setToken(null);
     setUser(null);
     localStorage.removeItem('token');

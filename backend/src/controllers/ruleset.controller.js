@@ -3,6 +3,43 @@ import mongoose from 'mongoose';
 import Friend from '../models/Friend.model.js';
 import RuleSet from '../models/RuleSet.model.js';
 
+const CAPTAIN_MULTIPLIER = 2;
+
+const sanitizeRules = (rules) => {
+	const arr = Array.isArray(rules) ? rules : [];
+	const out = [];
+	let captainSeen = false;
+
+	for (const r of arr) {
+		if (!r || typeof r !== 'object') continue;
+		const event = String(r.event || '').trim();
+		if (!event) continue;
+
+		if (event === 'captainMultiplier') {
+			if (captainSeen) continue;
+			captainSeen = true;
+			out.push({
+				event: 'captainMultiplier',
+				points: 0,
+				multiplier: CAPTAIN_MULTIPLIER,
+				enabled: r.enabled !== false,
+			});
+			continue;
+		}
+
+		const points = Number(r.points);
+		const multiplier = Number(r.multiplier);
+		out.push({
+			event,
+			points: Number.isFinite(points) ? points : 0,
+			multiplier: Number.isFinite(multiplier) ? multiplier : 1,
+			enabled: r.enabled !== false,
+		});
+	}
+
+	return out;
+};
+
 export const createRuleSet = async (req, res, next) => {
 	try {
 		const { friendId, rulesetName, rules } = req.body;
@@ -26,7 +63,7 @@ export const createRuleSet = async (req, res, next) => {
 			userId: req.userId,
 			friendId,
 			rulesetName,
-			rules,
+			rules: sanitizeRules(rules),
 		});
 
 		return res.status(201).json(ruleset);
@@ -84,7 +121,7 @@ export const updateRuleSet = async (req, res, next) => {
 
 		const updates = {};
 		if (typeof rulesetName !== 'undefined') updates.rulesetName = rulesetName;
-		if (typeof rules !== 'undefined') updates.rules = rules;
+		if (typeof rules !== 'undefined') updates.rules = sanitizeRules(rules);
 
 		if (Object.keys(updates).length === 0) {
 			return res

@@ -30,6 +30,7 @@ export const PlayerSelectionPage = () => {
   const [session, setSession] = useState(null);
 	const [friendName, setFriendName] = useState('Friend');
   const [squads, setSquads] = useState(null);
+  const [captainEnabled, setCaptainEnabled] = useState(false);
 
   const [userPlayers, setUserPlayers] = useState([]);
   const [friendPlayers, setFriendPlayers] = useState([]);
@@ -58,30 +59,50 @@ export const PlayerSelectionPage = () => {
 		return u >= 6 && u <= 9 && f >= 6 && f <= 9;
 	}, [userPlayers, friendPlayers]);
 
+  const isCaptainMultiplierEnabled = (ruleset) => {
+    const rules = Array.isArray(ruleset?.rules) ? ruleset.rules : [];
+    const capRule = rules.find((r) => String(r?.event || '') === 'captainMultiplier');
+    return Boolean(capRule && capRule.enabled !== false);
+  };
+
   const load = async () => {
-  const [sessionRes, selectionRes] = await Promise.all([
-    axiosInstance.get(`/api/matches/session/${sessionId}`),
-    axiosInstance.get(`/api/player-selections/${sessionId}`).catch((err) => {
-      if (err?.response?.status === 404) return { data: null };
-      throw err;
-    }),
-  ]);
+    const [sessionRes, selectionRes] = await Promise.all([
+      axiosInstance.get(`/api/matches/session/${sessionId}`),
+      axiosInstance.get(`/api/player-selections/${sessionId}`).catch((err) => {
+        if (err?.response?.status === 404) return { data: null };
+        throw err;
+      }),
+    ]);
 
-  setSession(sessionRes.data || null);
-  setSelection(selectionRes.data || null);
+    const loadedSession = sessionRes.data || null;
+    setSession(loadedSession);
+    setSelection(selectionRes.data || null);
 
-  // Load friend name for labels
-  try {
-    const fid = sessionRes.data?.friendId;
-    if (fid) {
-      const friendsRes = await axiosInstance.get('/api/friends');
-      const list = friendsRes.data || [];
-      const fr = list.find((f) => String(f?._id) === String(fid));
-      setFriendName(fr?.friendName || 'Friend');
+    // Load ruleset to decide whether captain selection is required/shown
+    try {
+      const rid = loadedSession?.rulesetId;
+      if (rid) {
+        const rulesetRes = await axiosInstance.get(`/api/rulesets/${rid}`);
+        setCaptainEnabled(isCaptainMultiplierEnabled(rulesetRes.data));
+      } else {
+        setCaptainEnabled(false);
+      }
+    } catch {
+      setCaptainEnabled(false);
     }
-  } catch {
-    setFriendName('Friend');
-  }
+
+    // Load friend name for labels
+    try {
+      const fid = loadedSession?.friendId;
+      if (fid) {
+        const friendsRes = await axiosInstance.get('/api/friends');
+        const list = friendsRes.data || [];
+        const fr = list.find((f) => String(f?._id) === String(fid));
+        setFriendName(fr?.friendName || 'Friend');
+      }
+    } catch {
+      setFriendName('Friend');
+    }
 
   const s = selectionRes.data;
   const up = Array.isArray(s?.userPlayers) && s.userPlayers.length > 0 ? s.userPlayers : s?.selectedPlayers || [];
@@ -91,15 +112,15 @@ export const PlayerSelectionPage = () => {
   setUserCaptain(s?.userCaptain || s?.captain || '');
   setFriendCaptain(s?.friendCaptain || '');
 
-  const realMatchId = sessionRes.data?.realMatchId;
-  if (realMatchId) {
-    try {
-      const squadsRes = await axiosInstance.get(`/api/cricket/matches/${realMatchId}/squads`);
-      setSquads(squadsRes.data || null);
-    } catch {
-      setSquads(null);
+    const realMatchId = loadedSession?.realMatchId;
+    if (realMatchId) {
+      try {
+        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${realMatchId}/squads`);
+        setSquads(squadsRes.data || null);
+      } catch {
+        setSquads(null);
+      }
     }
-  }
   };
 
   useEffect(() => {
@@ -119,23 +140,25 @@ export const PlayerSelectionPage = () => {
 		setError('Pick 6 to 9 players for both you and your friend');
 		return;
 	}
-	if (!userCaptain || !userPlayers.includes(userCaptain)) {
-		setError('Select your captain (must be in your team)');
-		return;
-	}
-	if (!friendCaptain || !friendPlayers.includes(friendCaptain)) {
-		setError("Select friend's captain (must be in friend's team)");
-		return;
-	}
+  if (captainEnabled) {
+    if (!userCaptain || !userPlayers.includes(userCaptain)) {
+      setError('Select your captain (must be in your team)');
+      return;
+    }
+    if (!friendCaptain || !friendPlayers.includes(friendCaptain)) {
+      setError("Select friend's captain (must be in friend's team)");
+      return;
+    }
+  }
 
     setSaving(true);
     try {
       const res = await axiosInstance.post('/api/player-selections', {
         sessionId,
 		userPlayers: clampPlayers(userPlayers),
-		userCaptain,
+		userCaptain: captainEnabled ? userCaptain : null,
 		friendPlayers: clampPlayers(friendPlayers),
-		friendCaptain,
+		friendCaptain: captainEnabled ? friendCaptain : null,
       });
       setSelection(res.data);
       setInfo('Saved');
@@ -270,43 +293,45 @@ export const PlayerSelectionPage = () => {
             </div>
           </Card>
 
-          <Card title="Captains">
-            <div className="grid gap-3 grid-cols-1">
-              <label className="block">
-                <div className="text-sm font-medium text-slate-700 mb-1">My captain</div>
-                <select
-                  value={userCaptain}
-                  onChange={(e) => setUserCaptain(e.target.value)}
-                  disabled={isFrozen}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
-                >
-                  <option value="">Select captain</option>
-                  {userPlayers.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
+          {captainEnabled ? (
+            <Card title="Captains">
+              <div className="grid gap-3 grid-cols-1">
+                <label className="block">
+                  <div className="text-sm font-medium text-slate-700 mb-1">My captain</div>
+                  <select
+                    value={userCaptain}
+                    onChange={(e) => setUserCaptain(e.target.value)}
+                    disabled={isFrozen}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                  >
+                    <option value="">Select captain</option>
+                    {userPlayers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <label className="block">
-                <div className="text-sm font-medium text-slate-700 mb-1">{friendName} captain</div>
-                <select
-                  value={friendCaptain}
-                  onChange={(e) => setFriendCaptain(e.target.value)}
-                  disabled={isFrozen}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
-                >
-                  <option value="">Select captain</option>
-                  {friendPlayers.map((p) => (
-                    <option key={p} value={p}>
-                      {p}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </Card>
+                <label className="block">
+                  <div className="text-sm font-medium text-slate-700 mb-1">{friendName} captain</div>
+                  <select
+                    value={friendCaptain}
+                    onChange={(e) => setFriendCaptain(e.target.value)}
+                    disabled={isFrozen}
+                    className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                  >
+                    <option value="">Select captain</option>
+                    {friendPlayers.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </Card>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <Button onClick={onSave} disabled={saving || isFrozen} fullWidth>

@@ -2,6 +2,13 @@ import mongoose from 'mongoose';
 
 import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
+import RuleSet from '../models/RuleSet.model.js';
+
+const isCaptainMultiplierEnabled = (ruleSet) => {
+  const rules = Array.isArray(ruleSet?.rules) ? ruleSet.rules : [];
+  const capRule = rules.find((r) => String(r?.event || '') === 'captainMultiplier');
+  return Boolean(capRule && capRule.enabled !== false);
+};
 
 export const createOrUpdateSelection = async (req, res, next) => {
   try {
@@ -25,6 +32,19 @@ export const createOrUpdateSelection = async (req, res, next) => {
       return res.status(400).json({ message: 'Invalid sessionId' });
     }
 
+		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId }).lean();
+		if (!session) {
+			return res.status(404).json({ message: 'MatchSession not found' });
+		}
+
+		let captainEnabled = false;
+		try {
+			const ruleSet = await RuleSet.findOne({ _id: session.rulesetId, userId: req.userId }).lean();
+			captainEnabled = isCaptainMultiplierEnabled(ruleSet);
+		} catch {
+			captainEnabled = false;
+		}
+
     const safeUserPlayers = Array.isArray(userPlayers)
       ? userPlayers
       : Array.isArray(selectedPlayers)
@@ -38,16 +58,28 @@ export const createOrUpdateSelection = async (req, res, next) => {
     if (safeUserPlayers.length === 0) {
       return res.status(400).json({ message: 'Select at least one player for your team' });
     }
-    if (safeUserCaptain && !safeUserPlayers.includes(safeUserCaptain)) {
-      return res.status(400).json({ message: 'Your captain must be one of your selected players' });
-    }
-    if (safeFriendCaptain && !safeFriendPlayers.includes(safeFriendCaptain)) {
-      return res.status(400).json({ message: "Friend captain must be one of friend's selected players" });
-    }
 
-    const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId });
-    if (!session) {
-      return res.status(404).json({ message: 'MatchSession not found' });
+    const finalUserCaptain = captainEnabled ? safeUserCaptain : null;
+    const finalFriendCaptain = captainEnabled ? safeFriendCaptain : null;
+
+    if (captainEnabled) {
+      if (!finalUserCaptain) {
+        return res.status(400).json({ message: 'userCaptain is required for this ruleset' });
+      }
+      if (!finalFriendCaptain) {
+        return res.status(400).json({ message: 'friendCaptain is required for this ruleset' });
+      }
+      if (!safeUserPlayers.includes(finalUserCaptain)) {
+        return res.status(400).json({ message: 'Your captain must be one of your selected players' });
+      }
+      if (!safeFriendPlayers.includes(finalFriendCaptain)) {
+        return res
+          .status(400)
+          .json({ message: "Friend captain must be one of friend's selected players" });
+      }
+    } else {
+      // If the ruleset doesn't use captain multiplier, don't persist captains.
+      // (This keeps result/share consistent and avoids confusing stale captains.)
     }
 
     const existing = await PlayerSelection.findOne({ sessionId });
@@ -58,13 +90,13 @@ export const createOrUpdateSelection = async (req, res, next) => {
       }
 
       existing.userPlayers = safeUserPlayers;
-      existing.userCaptain = safeUserCaptain;
+      existing.userCaptain = finalUserCaptain;
       existing.friendPlayers = safeFriendPlayers;
-      existing.friendCaptain = safeFriendCaptain;
+      existing.friendCaptain = finalFriendCaptain;
 
       // Keep legacy fields in sync for existing scoring/share flows
       existing.selectedPlayers = safeUserPlayers;
-      existing.captain = safeUserCaptain;
+      existing.captain = finalUserCaptain;
       await existing.save();
 
       return res.status(200).json(existing);
@@ -73,13 +105,13 @@ export const createOrUpdateSelection = async (req, res, next) => {
     const created = await PlayerSelection.create({
       sessionId,
       userPlayers: safeUserPlayers,
-      userCaptain: safeUserCaptain,
+      userCaptain: finalUserCaptain,
       friendPlayers: safeFriendPlayers,
-      friendCaptain: safeFriendCaptain,
+      friendCaptain: finalFriendCaptain,
 
       // legacy
       selectedPlayers: safeUserPlayers,
-      captain: safeUserCaptain,
+      captain: finalUserCaptain,
       isFrozen: false,
     });
 

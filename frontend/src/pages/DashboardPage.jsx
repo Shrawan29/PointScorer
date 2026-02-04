@@ -46,7 +46,6 @@ export const DashboardPage = () => {
       <PageHeader
         title="Dashboard"
         subtitle={`You have ${friendCount} friend(s).`}
-        actions={<Link to="/friends"><Button variant="secondary">Manage friends</Button></Link>}
       />
 
       {error && <Alert type="error">{error}</Alert>}

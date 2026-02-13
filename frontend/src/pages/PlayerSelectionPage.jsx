@@ -46,30 +46,51 @@ export const PlayerSelectionPage = () => {
 
   const isFrozen = Boolean(selection?.isFrozen);
 
-	const availablePlayers = useMemo(() => {
-		const list = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
+  const team1Name = squads?.team1?.name || null;
+  const team2Name = squads?.team2?.name || null;
+
+  const hasTeamSquads = Boolean(
+    Array.isArray(squads?.team1?.squad) && squads.team1.squad.length > 0 &&
+    Array.isArray(squads?.team2?.squad) && squads.team2.squad.length > 0,
+  );
+  const hasTeamPlayingXI = Boolean(
+    Array.isArray(squads?.team1?.playingXI) && squads.team1.playingXI.length > 0 &&
+    Array.isArray(squads?.team2?.playingXI) && squads.team2.playingXI.length > 0,
+  );
+
+  const showPlayingXI = Boolean(squads?.isPlayingXIDeclared && hasTeamPlayingXI);
+
+  const availablePlayers = useMemo(() => {
+    const list = showPlayingXI
+      ? [...(squads?.team1?.playingXI || []), ...(squads?.team2?.playingXI || [])]
+      : [...(squads?.team1?.squad || []), ...(squads?.team2?.squad || [])];
 		const q = search.trim().toLowerCase();
 		if (!q) return list;
 		return list.filter((p) => String(p).toLowerCase().includes(q));
-	}, [squads, search]);
+  }, [squads, search, showPlayingXI]);
 
 	// Group players by team
 	const playersByTeam = useMemo(() => {
 		const grouped = {};
-		
-		// Use team-separated players from backend
-		if (squads?.team1?.players && squads?.team2?.players) {
-			grouped[squads.team1] = squads.team1.players;
-			grouped[squads.team2] = squads.team2.players;
-		} else if (squads?.playingXI?.length) {
-			// Fallback: if team separation not available, show all
-			grouped['Players'] = squads.playingXI;
-		} else if (squads?.players?.length) {
-			grouped['Players'] = squads.players;
-		}
+
+    if (showPlayingXI && hasTeamPlayingXI) {
+      grouped[team1Name || 'Team 1'] = squads?.team1?.playingXI || [];
+      grouped[team2Name || 'Team 2'] = squads?.team2?.playingXI || [];
+      return grouped;
+    }
+
+    if (hasTeamSquads) {
+      grouped[team1Name || 'Team 1'] = squads?.team1?.squad || [];
+      grouped[team2Name || 'Team 2'] = squads?.team2?.squad || [];
+      return grouped;
+    }
+
+    // Last resort (should be rare): show whatever list we have without team separation
+    const fallback = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
+    grouped['Players'] = fallback;
 		
 		return grouped;
-	}, [squads]);
+  }, [squads, hasTeamPlayingXI, hasTeamSquads, showPlayingXI, team1Name, team2Name]);
 
 	const filteredPlayersByTeam = useMemo(() => {
 		const q = search.trim().toLowerCase();
@@ -244,20 +265,20 @@ export const PlayerSelectionPage = () => {
       ) : (
         <div className="grid gap-3">
           <Card title="Selected players">
-            {squads?.isPlayingXIDeclared === false ? (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="text-amber-600 font-semibold text-sm">ℹ️ Playing XI Not Declared</div>
+              {squads?.isPlayingXIDeclared === false ? (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+                  <div className="text-amber-900 font-semibold text-sm">Playing XI not declared yet</div>
+                  <p className="text-xs sm:text-sm text-amber-800 mt-1">
+                    Toss hasn’t happened yet. Showing squads for now. Once Playing XI is announced, we’ll show the final XI.
+                  </p>
                 </div>
-                <p className="text-xs sm:text-sm text-amber-800">
-                  The toss hasn't happened yet. Playing XI will be announced once the toss is done. Please check back later.
-                </p>
+              ) : null}
+
+              <div className="text-xs sm:text-sm text-slate-600 mb-3">
+                Pick 6–9 players for you and your friend from{' '}
+                {team1Name && team2Name ? `${team1Name} and ${team2Name}` : 'the match'}.{' '}
+                {showPlayingXI ? 'Showing Playing XI.' : 'Showing squads.'} Players are grouped by team below.
               </div>
-            ) : (
-              <>
-                <div className="text-xs sm:text-sm text-slate-600 mb-3">
-                  Pick 6–9 players for you and your friend from {squads?.team1 && squads?.team2 ? `${squads.team1} and ${squads.team2}` : 'the match'}. Players are grouped by team below.
-                </div>
 
                 <div className="flex flex-col gap-3">
                   <div className="flex-1">
@@ -366,8 +387,7 @@ export const PlayerSelectionPage = () => {
                 </div>
               </div>
             </div>
-              </>
-            )}
+
           </Card>
 
           {captainEnabled ? (
@@ -411,10 +431,10 @@ export const PlayerSelectionPage = () => {
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <Button onClick={onSave} disabled={saving || isFrozen || squads?.isPlayingXIDeclared === false} fullWidth>
+            <Button onClick={onSave} disabled={saving || isFrozen} fullWidth>
               {saving ? 'Saving...' : selection ? 'Update selection' : 'Create selection'}
             </Button>
-            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection || squads?.isPlayingXIDeclared === false} fullWidth>
+            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection} fullWidth>
               {freezing ? 'Freezing...' : 'Freeze'}
             </Button>
           </div>

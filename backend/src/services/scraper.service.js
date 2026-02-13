@@ -399,9 +399,12 @@ const tryFetchFirstWorking = async (candidates, label) => {
 	return { url: null, html: null };
 };
 
-const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
+const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = {}) => {
 	if (!matchUrl) return null;
 	await delay(SCRAPER_DELAY_MS);
+
+	const team1Name = normalizeWhitespace(options?.team1Name || '') || null;
+	const team2Name = normalizeWhitespace(options?.team2Name || '') || null;
 
 	const matchId = extractMatchIdFromUrl(matchUrl);
 	const base = String(matchUrl);
@@ -449,42 +452,12 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 			.filter(Boolean),
 	);
 
-	// Try to find team-specific playing XI sections
-	const team1PlayingXI = [];
-	const team2PlayingXI = [];
-	let foundTeamSeparation = false;
 	let isPlayingXIDeclared = false;
-
-	// Check if Playing XI is declared or "Not Yet Declared"
-	const playingXIStatus = textBlobs.find(line => 
-		/playing\s*xi|xi\s*declared|xi\s*not\s*yet\s*declared/i.test(line)
+	const playingXIStatus = textBlobs.find((line) =>
+		/playing\s*xi|xi\s*declared|xi\s*not\s*yet\s*declared/i.test(line),
 	);
-	
 	if (playingXIStatus) {
-		isPlayingXIDeclared = !/not\s*yet\s*declared|tbd|to\s*be\s*announced/i.test(playingXIStatus);
-	}
-
-	for (let i = 0; i < textBlobs.length; i++) {
-		const line = textBlobs[i];
-		
-		// Look for team headers followed by playing XI
-		if (/playing\s*xi/i.test(line)) {
-			const after = line.split(/playing\s*xi\s*[:\-]/i)[1];
-			if (!after) continue;
-			const players = splitPlayersList(after);
-			if (players.length >= 8) {
-				// Check if this looks like Team 1 or Team 2 section
-				const contextBefore = textBlobs.slice(Math.max(0, i - 3), i).join(' ');
-				// This is a heuristic - if we can't detect, we'll fall back to splitting
-				if (team1PlayingXI.length === 0) {
-					team1PlayingXI.push(...players);
-					foundTeamSeparation = true;
-				} else if (team2PlayingXI.length === 0) {
-					team2PlayingXI.push(...players);
-					foundTeamSeparation = true;
-				}
-			}
-		}
+		isPlayingXIDeclared = !/not\s*yet\s*declared|not\s*declared|tbd|to\s*be\s*announced/i.test(playingXIStatus);
 	}
 
 	// If we couldn't find team-separated playing XI, get all and fallback
@@ -509,27 +482,69 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 
 	const allPlayers = uniqueStrings([...(allPlayingXI.length ? allPlayingXI : []), ...profilePlayers]);
 
-	// If we found team-separated playing XI, use them; otherwise split all players
-	let finalTeam1Players = team1PlayingXI.length > 0 ? team1PlayingXI : [];
-	let finalTeam2Players = team2PlayingXI.length > 0 ? team2PlayingXI : [];
-	
-	if (finalTeam1Players.length === 0 && finalTeam2Players.length === 0 && allPlayers.length > 0) {
-		// Heuristic: split the players list roughly in half (team1 = first half, team2 = second half)
-		// This is not perfect but better than showing all together
-		const mid = Math.ceil(allPlayers.length / 2);
-		finalTeam1Players = allPlayers.slice(0, mid);
-		finalTeam2Players = allPlayers.slice(mid);
-	}
+	const looksLikeTeamHeader = (text) => {
+		const t = normalizeWhitespace(text);
+		if (!t) return false;
+		if (team1Name && t === team1Name) return true;
+		if (team2Name && t === team2Name) return true;
+		return false;
+	};
+
+	const findTeamHeaderEl = (name) => {
+		if (!name) return null;
+		const candidates = $('h1,h2,h3,h4,h5,div,span')
+			.toArray()
+			.map((el) => ({ el, text: normalizeWhitespace($(el).text()) }))
+			.filter((x) => x.text && x.text === name);
+		return candidates.length ? candidates[0].el : null;
+	};
+
+	const collectPlayersAfterHeader = (headerEl) => {
+		if (!headerEl) return [];
+		const $header = $(headerEl);
+		const $parent = $header.parent();
+		if (!$parent?.length) return [];
+
+		const players = [];
+		let $sib = $header.next();
+		let guard = 0;
+		while ($sib && $sib.length && guard < 200) {
+			guard += 1;
+			const t = normalizeWhitespace($sib.text());
+			if (looksLikeTeamHeader(t)) break;
+			players.push(
+				...$sib
+					.find('a[href*="/profiles/"]')
+					.toArray()
+					.map((el) => normalizeWhitespace($(el).text()))
+					.filter((name) => name && name.length >= 3 && name.length <= 40),
+			);
+			$sib = $sib.next();
+		}
+		return uniqueStrings(players);
+	};
+
+	// Team-separated squad players (no mixing)
+	const team1HeaderEl = findTeamHeaderEl(team1Name);
+	const team2HeaderEl = findTeamHeaderEl(team2Name);
+	const team1SquadPlayers = collectPlayersAfterHeader(team1HeaderEl);
+	const team2SquadPlayers = collectPlayersAfterHeader(team2HeaderEl);
+
+	const playingXISet = new Set(uniqueStrings(allPlayingXI));
+	const team1XIPlayers = team1SquadPlayers.filter((p) => playingXISet.has(p));
+	const team2XIPlayers = team2SquadPlayers.filter((p) => playingXISet.has(p));
 
 	return {
 		matchId: matchId || null,
 		matchUrl,
 		sourceUrl: fetchedUrl,
-		team1: {
-			players: uniqueStrings(finalTeam1Players),
+		squad: {
+			team1: team1SquadPlayers,
+			team2: team2SquadPlayers,
 		},
-		team2: {
-			players: uniqueStrings(finalTeam2Players),
+		playingXIByTeam: {
+			team1: team1XIPlayers,
+			team2: team2XIPlayers,
 		},
 		players: allPlayers,
 		playingXI: uniqueStrings(allPlayingXI.length > 0 ? allPlayingXI : allPlayers),
@@ -1010,16 +1025,28 @@ export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
 	const match = list.find((m) => String(m?.matchUrl || '').includes(`/${id}/`)) || null;
 	if (!match?.matchUrl) return null;
 
-	const data = await scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl(match.matchUrl);
+	const data = await scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl(match.matchUrl, {
+		team1Name: match.team1 || null,
+		team2Name: match.team2 || null,
+	});
 	if (!data) return null;
 	const normalized = {
 		matchId: id,
 		matchUrl: match.matchUrl,
 		matchName: match.matchName || null,
-		team1: match.team1 || null,
-		team2: match.team2 || null,
+		team1: {
+			name: match.team1 || null,
+			squad: data?.squad?.team1 || [],
+			playingXI: data?.playingXIByTeam?.team1 || [],
+		},
+		team2: {
+			name: match.team2 || null,
+			squad: data?.squad?.team2 || [],
+			playingXI: data?.playingXIByTeam?.team2 || [],
+		},
 		players: data.players || [],
 		playingXI: data.playingXI || [],
+		isPlayingXIDeclared: data?.isPlayingXIDeclared ?? null,
 		sourceUrl: data.sourceUrl || null,
 	};
 

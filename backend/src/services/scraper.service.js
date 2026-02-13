@@ -453,6 +453,16 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 	const team1PlayingXI = [];
 	const team2PlayingXI = [];
 	let foundTeamSeparation = false;
+	let isPlayingXIDeclared = false;
+
+	// Check if Playing XI is declared or "Not Yet Declared"
+	const playingXIStatus = textBlobs.find(line => 
+		/playing\s*xi|xi\s*declared|xi\s*not\s*yet\s*declared/i.test(line)
+	);
+	
+	if (playingXIStatus) {
+		isPlayingXIDeclared = !/not\s*yet\s*declared|tbd|to\s*be\s*announced/i.test(playingXIStatus);
+	}
 
 	for (let i = 0; i < textBlobs.length; i++) {
 		const line = textBlobs[i];
@@ -523,6 +533,7 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 		},
 		players: allPlayers,
 		playingXI: uniqueStrings(allPlayingXI.length > 0 ? allPlayingXI : allPlayers),
+		isPlayingXIDeclared,
 	};
 };
 

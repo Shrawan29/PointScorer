@@ -244,26 +244,37 @@ export const PlayerSelectionPage = () => {
       ) : (
         <div className="grid gap-3">
           <Card title="Selected players">
-            <div className="text-xs sm:text-sm text-slate-600 mb-3">
-              Pick 6–9 players for you and your friend from {squads?.team1 && squads?.team2 ? `${squads.team1} and ${squads.team2}` : 'the match'}. Players are grouped by team below.
-            </div>
+            {squads?.isPlayingXIDeclared === false ? (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="text-amber-600 font-semibold text-sm">ℹ️ Playing XI Not Declared</div>
+                </div>
+                <p className="text-xs sm:text-sm text-amber-800">
+                  The toss hasn't happened yet. Playing XI will be announced once the toss is done. Please check back later.
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="text-xs sm:text-sm text-slate-600 mb-3">
+                  Pick 6–9 players for you and your friend from {squads?.team1 && squads?.team2 ? `${squads.team1} and ${squads.team2}` : 'the match'}. Players are grouped by team below.
+                </div>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex-1">
-                <div className="text-sm font-medium text-slate-700 mb-1">Search players</div>
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search"
-                  disabled={isFrozen}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
-                />
-                <div className="mt-3 max-h-64 overflow-auto border rounded-md">
-                  {Object.keys(filteredPlayersByTeam).length === 0 ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-slate-700 mb-1">Search players</div>
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search"
+                      disabled={isFrozen}
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                    />
+                    <div className="mt-3 max-h-64 overflow-auto border rounded-md">
+                      {Object.keys(filteredPlayersByTeam).length === 0 ? (
                     <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
-                  ) : (
-                    <div className="divide-y">
-                      {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
+                      ) : (
+                        <div className="divide-y">
+                          {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
                         <div key={teamName}>
                           <div className={`px-3 py-2.5 font-semibold text-xs sm:text-sm sticky top-0 border-b-2 ${
                             teamIndex === 0 
@@ -325,9 +336,9 @@ export const PlayerSelectionPage = () => {
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-              </div>
+                      )}
+                    </div>
+                  </div>
 
               <div className="flex-1 grid grid-cols-1 gap-4">
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
@@ -355,6 +366,8 @@ export const PlayerSelectionPage = () => {
                 </div>
               </div>
             </div>
+              </>
+            )}
           </Card>
 
           {captainEnabled ? (
@@ -398,10 +411,10 @@ export const PlayerSelectionPage = () => {
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <Button onClick={onSave} disabled={saving || isFrozen} fullWidth>
+            <Button onClick={onSave} disabled={saving || isFrozen || squads?.isPlayingXIDeclared === false} fullWidth>
               {saving ? 'Saving...' : selection ? 'Update selection' : 'Create selection'}
             </Button>
-            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection} fullWidth>
+            <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection || squads?.isPlayingXIDeclared === false} fullWidth>
               {freezing ? 'Freezing...' : 'Freeze'}
             </Button>
           </div>

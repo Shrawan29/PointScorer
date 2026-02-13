@@ -449,14 +449,43 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 			.filter(Boolean),
 	);
 
-	const playingXI = [];
+	// Try to find team-specific playing XI sections
+	const team1PlayingXI = [];
+	const team2PlayingXI = [];
+	let foundTeamSeparation = false;
+
+	for (let i = 0; i < textBlobs.length; i++) {
+		const line = textBlobs[i];
+		
+		// Look for team headers followed by playing XI
+		if (/playing\s*xi/i.test(line)) {
+			const after = line.split(/playing\s*xi\s*[:\-]/i)[1];
+			if (!after) continue;
+			const players = splitPlayersList(after);
+			if (players.length >= 8) {
+				// Check if this looks like Team 1 or Team 2 section
+				const contextBefore = textBlobs.slice(Math.max(0, i - 3), i).join(' ');
+				// This is a heuristic - if we can't detect, we'll fall back to splitting
+				if (team1PlayingXI.length === 0) {
+					team1PlayingXI.push(...players);
+					foundTeamSeparation = true;
+				} else if (team2PlayingXI.length === 0) {
+					team2PlayingXI.push(...players);
+					foundTeamSeparation = true;
+				}
+			}
+		}
+	}
+
+	// If we couldn't find team-separated playing XI, get all and fallback
+	const allPlayingXI = [];
 	for (const line of textBlobs) {
 		if (!/playing\s*xi/i.test(line)) continue;
 		const after = line.split(/playing\s*xi\s*[:\-]/i)[1];
 		if (!after) continue;
 		const players = splitPlayersList(after);
 		if (players.length >= 8) {
-			playingXI.push(...players);
+			allPlayingXI.push(...players);
 		}
 	}
 
@@ -468,11 +497,34 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 			.filter((name) => name && name.length >= 3 && name.length <= 40),
 	);
 
-	const allPlayers = uniqueStrings([...(playingXI.length ? playingXI : []), ...profilePlayers]);
+	const allPlayers = uniqueStrings([...(allPlayingXI.length ? allPlayingXI : []), ...profilePlayers]);
+
+	// If we found team-separated playing XI, use them; otherwise split all players
+	let finalTeam1Players = team1PlayingXI.length > 0 ? team1PlayingXI : [];
+	let finalTeam2Players = team2PlayingXI.length > 0 ? team2PlayingXI : [];
+	
+	if (finalTeam1Players.length === 0 && finalTeam2Players.length === 0 && allPlayers.length > 0) {
+		// Heuristic: split the players list roughly in half (team1 = first half, team2 = second half)
+		// This is not perfect but better than showing all together
+		const mid = Math.ceil(allPlayers.length / 2);
+		finalTeam1Players = allPlayers.slice(0, mid);
+		finalTeam2Players = allPlayers.slice(mid);
+	}
 
 	return {
 		matchId: matchId || null,
 		matchUrl,
+		sourceUrl: fetchedUrl,
+		team1: {
+			players: uniqueStrings(finalTeam1Players),
+		},
+		team2: {
+			players: uniqueStrings(finalTeam2Players),
+		},
+		players: allPlayers,
+		playingXI: uniqueStrings(allPlayingXI.length > 0 ? allPlayingXI : allPlayers),
+	};
+};
 		sourceUrl: fetchedUrl,
 		players: allPlayers,
 		playingXI: uniqueStrings(playingXI),

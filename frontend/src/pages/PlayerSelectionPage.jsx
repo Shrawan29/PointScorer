@@ -56,22 +56,16 @@ export const PlayerSelectionPage = () => {
 	// Group players by team
 	const playersByTeam = useMemo(() => {
 		const grouped = {};
-		const list = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
 		
-		// Use team1 and team2 from squads (country codes like IND, AUS)
-		if (squads?.team1 && squads?.team2) {
-			grouped[squads.team1] = list;
-			grouped[squads.team2] = list;
-		} else if (Array.isArray(squads?.squads)) {
-			// Fallback: try to use squad structure
-			squads.squads.forEach(team => {
-				if (team.name && Array.isArray(team.players)) {
-					grouped[team.name] = team.players;
-				}
-			});
-		} else {
-			// If no team structure, show all players
-			grouped['Players'] = list;
+		// Use team-separated players from backend
+		if (squads?.team1?.players && squads?.team2?.players) {
+			grouped[squads.team1] = squads.team1.players;
+			grouped[squads.team2] = squads.team2.players;
+		} else if (squads?.playingXI?.length) {
+			// Fallback: if team separation not available, show all
+			grouped['Players'] = squads.playingXI;
+		} else if (squads?.players?.length) {
+			grouped['Players'] = squads.players;
 		}
 		
 		return grouped;
@@ -250,8 +244,8 @@ export const PlayerSelectionPage = () => {
       ) : (
         <div className="grid gap-3">
           <Card title="Selected players">
-            <div className="text-xs sm:text-sm text-slate-600 mb-2">
-              Pick 6–9 players from {squads?.team1 && squads?.team2 ? `${squads.team1} vs ${squads.team2}` : 'the match'}. Showing playing XI players.
+            <div className="text-xs sm:text-sm text-slate-600 mb-3">
+              Pick 6–9 players for you and your friend from {squads?.team1 && squads?.team2 ? `${squads.team1} and ${squads.team2}` : 'the match'}. Players are grouped by team below.
             </div>
 
             <div className="flex flex-col gap-3">
@@ -269,10 +263,21 @@ export const PlayerSelectionPage = () => {
                     <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
                   ) : (
                     <div className="divide-y">
-                      {Object.entries(filteredPlayersByTeam).map(([teamName, players]) => (
+                      {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
                         <div key={teamName}>
-                          <div className="px-3 py-2 bg-slate-100 font-semibold text-xs sm:text-sm text-slate-700 sticky top-0">
-                            {teamName}
+                          <div className={`px-3 py-2.5 font-semibold text-xs sm:text-sm sticky top-0 border-b-2 ${
+                            teamIndex === 0 
+                              ? 'bg-blue-50 text-blue-900 border-blue-200' 
+                              : 'bg-orange-50 text-orange-900 border-orange-200'
+                          }`}>
+                            <div className="flex items-center gap-2">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
+                                teamIndex === 0 ? 'bg-blue-600' : 'bg-orange-600'
+                              }`}>
+                                {teamIndex + 1}
+                              </span>
+                              {teamName}
+                            </div>
                           </div>
                           {players.map((p) => {
                             const inUser = userPlayers.includes(p);
@@ -324,17 +329,29 @@ export const PlayerSelectionPage = () => {
                 </div>
               </div>
 
-              <div className="flex-1">
-                <div className="text-sm font-medium text-slate-700">My team ({userPlayers.length}/9)</div>
-                <div className="text-xs text-slate-600 mb-2">Pick 6–9</div>
-                <div className="text-xs sm:text-sm text-slate-900 min-h-10 break-words">
-                  {userPlayers.length === 0 ? '—' : userPlayers.join(', ')}
+              <div className="flex-1 grid grid-cols-1 gap-4">
+                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                  <div className="text-sm font-semibold text-slate-900 mb-2">My team ({userPlayers.length}/9)</div>
+                  <div className="text-xs text-slate-600 mb-2">Pick 6–9 players</div>
+                  <div className="text-xs sm:text-sm text-slate-900 min-h-12 bg-white border border-slate-100 rounded p-2 break-words">
+                    {userPlayers.length === 0 ? (
+                      <span className="text-slate-400">No players selected yet</span>
+                    ) : (
+                      userPlayers.join(', ')
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-3 text-sm font-medium text-slate-700">{friendName} team ({friendPlayers.length}/9)</div>
-                <div className="text-xs text-slate-600 mb-2">Pick 6–9</div>
-                <div className="text-xs sm:text-sm text-slate-900 min-h-10 break-words">
-                  {friendPlayers.length === 0 ? '—' : friendPlayers.join(', ')}
+                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                  <div className="text-sm font-semibold text-slate-900 mb-2">{friendName}'s team ({friendPlayers.length}/9)</div>
+                  <div className="text-xs text-slate-600 mb-2">Pick 6–9 players</div>
+                  <div className="text-xs sm:text-sm text-slate-900 min-h-12 bg-white border border-slate-100 rounded p-2 break-words">
+                    {friendPlayers.length === 0 ? (
+                      <span className="text-slate-400">No players selected yet</span>
+                    ) : (
+                      friendPlayers.join(', ')
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

@@ -58,23 +58,20 @@ export const PlayerSelectionPage = () => {
 		const grouped = {};
 		const list = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
 		
-		// If squads has team structure, use it; otherwise treat all as one team
+		// Use team1 and team2 from squads (country codes like IND, AUS)
 		if (squads?.team1 && squads?.team2) {
-			grouped[squads.team1.name || 'Team 1'] = squads.team1.players || [];
-			grouped[squads.team2.name || 'Team 2'] = squads.team2.players || [];
-		} else {
+			grouped[squads.team1] = list;
+			grouped[squads.team2] = list;
+		} else if (Array.isArray(squads?.squads)) {
 			// Fallback: try to use squad structure
-			if (Array.isArray(squads?.squads)) {
-				squads.squads.forEach(team => {
-					if (team.name && Array.isArray(team.players)) {
-						grouped[team.name] = team.players;
-					}
-				});
-			}
-			// If no team structure, group all players under "All Players"
-			if (Object.keys(grouped).length === 0) {
-				grouped['All Players'] = list;
-			}
+			squads.squads.forEach(team => {
+				if (team.name && Array.isArray(team.players)) {
+					grouped[team.name] = team.players;
+				}
+			});
+		} else {
+			// If no team structure, show all players
+			grouped['Players'] = list;
 		}
 		
 		return grouped;
@@ -254,7 +251,7 @@ export const PlayerSelectionPage = () => {
         <div className="grid gap-3">
           <Card title="Selected players">
             <div className="text-xs sm:text-sm text-slate-600 mb-2">
-              Pick 6–9 players for you and your friend. If Playing XI is available, it will be used.
+              Pick 6–9 players from {squads?.team1 && squads?.team2 ? `${squads.team1} vs ${squads.team2}` : 'the match'}. Showing playing XI players.
             </div>
 
             <div className="flex flex-col gap-3">

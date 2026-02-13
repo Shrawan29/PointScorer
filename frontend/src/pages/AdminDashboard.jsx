@@ -44,6 +44,8 @@ const AdminDashboard = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState(null);
   const [blockingUserId, setBlockingUserId] = useState(null);
+  const [editingFriendsLimit, setEditingFriendsLimit] = useState(null);
+  const [editingFriendsValue, setEditingFriendsValue] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -163,23 +165,19 @@ const AdminDashboard = () => {
   };
 
   const handleUpdateMaxFriends = async (userId) => {
-    const userToUpdate = users.find(u => u._id === userId);
-    const newMax = prompt(`Enter max friends for ${userToUpdate.name}:`, userToUpdate.maxFriendsAllowed);
-
-    if (newMax === null) return;
-
-    if (isNaN(newMax) || parseInt(newMax) < 1 || parseInt(newMax) > 100) {
+    if (isNaN(editingFriendsValue) || parseInt(editingFriendsValue) < 1 || parseInt(editingFriendsValue) > 100) {
       setError('Please enter a valid number between 1 and 100');
-      setTimeout(() => setError(''), 3000);
       return;
     }
 
     try {
       const response = await axiosInstance.put(`/api/admin/users/${userId}`, {
-        maxFriendsAllowed: parseInt(newMax),
+        maxFriendsAllowed: parseInt(editingFriendsValue),
       });
       setSuccess('Max friends updated successfully');
       setUsers(users.map(u => u._id === userId ? response.data.user : u));
+      setEditingFriendsLimit(null);
+      setEditingFriendsValue('');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update user');
@@ -363,15 +361,47 @@ const AdminDashboard = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <div className="text-center px-2 py-1 bg-slate-100 rounded text-xs">
-                        <div className="text-slate-600">Friends</div>
-                        <button
-                          onClick={() => handleUpdateMaxFriends(u._id)}
-                          className="font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
-                        >
-                          {u.maxFriendsAllowed}
-                        </button>
-                      </div>
+                      {editingFriendsLimit === u._id ? (
+                        <div className="flex gap-2 items-center bg-slate-100 px-2 py-1 rounded text-xs">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={editingFriendsValue}
+                            onChange={(e) => setEditingFriendsValue(e.target.value)}
+                            className="w-16 px-2 py-1 border border-slate-300 rounded text-sm"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleUpdateMaxFriends(u._id)}
+                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-semibold"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingFriendsLimit(null);
+                              setEditingFriendsValue('');
+                            }}
+                            className="px-2 py-1 bg-slate-300 hover:bg-slate-400 text-slate-900 rounded text-xs font-semibold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-center px-2 py-1 bg-slate-100 rounded text-xs">
+                          <div className="text-slate-600">Friends</div>
+                          <button
+                            onClick={() => {
+                              setEditingFriendsLimit(u._id);
+                              setEditingFriendsValue(u.maxFriendsAllowed);
+                            }}
+                            className="font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                          >
+                            {u.maxFriendsAllowed}
+                          </button>
+                        </div>
+                      )}
 
                       <div className="text-center px-2 py-1 rounded text-xs font-semibold">
                         {u.isAdmin ? (

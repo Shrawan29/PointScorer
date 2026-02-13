@@ -4,8 +4,10 @@ import { useAuth } from '../context/AuthContext';
 import axiosInstance from '../api/axiosInstance';
 import Alert from '../components/Alert';
 import Button from '../components/Button';
+import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
+import FormField from '../components/FormField';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -71,7 +73,7 @@ const AdminDashboard = () => {
     try {
       setLoading(true);
       setError('');
-      const response = await axiosInstance.get('/admin/users');
+      const response = await axiosInstance.get('/api/admin/users');
       setUsers(response.data);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch users');
@@ -126,7 +128,25 @@ const AdminDashboard = () => {
     try {
       setSubmitting(true);
       setError('');
-      const response = await axiosInstance.post('/admin/users/create', formData);
+      const response = await axiosInstance.post('/api/admin/users/create', formData);
+      setSuccess('User created successfully');
+      setUsers([response.data.user, ...users]);
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        isAdmin: false,
+        maxFriendsAllowed: 10,
+      });
+      setFormErrors({});
+      setShowCreateUser(false);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create user');
+    } finally {
+      setSubmitting(false);
+    }
+  };
       setSuccess('User created successfully');
       setUsers([response.data.user, ...users]);
       setFormData({
@@ -149,7 +169,16 @@ const AdminDashboard = () => {
   const handleToggleBlock = async (userId, currentBlockStatus) => {
     try {
       setBlockingUserId(userId);
-      const response = await axiosInstance.patch(`/admin/users/${userId}/toggle-block`);
+      const response = await axiosInstance.patch(`/api/admin/users/${userId}/toggle-block`);
+      setSuccess(response.data.message);
+      setUsers(users.map(u => u._id === userId ? response.data.user : u));
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update user');
+    } finally {
+      setBlockingUserId(null);
+    }
+  };
       setSuccess(response.data.message);
       setUsers(users.map(u => u._id === userId ? response.data.user : u));
       setTimeout(() => setSuccess(''), 3000);
@@ -173,7 +202,16 @@ const AdminDashboard = () => {
     }
 
     try {
-      const response = await axiosInstance.put(`/admin/users/${userId}`, {
+      const response = await axiosInstance.put(`/api/admin/users/${userId}`, {
+        maxFriendsAllowed: parseInt(newMax),
+      });
+      setSuccess('Max friends updated successfully');
+      setUsers(users.map(u => u._id === userId ? response.data.user : u));
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update user');
+    }
+  };
         maxFriendsAllowed: parseInt(newMax),
       });
       setSuccess('Max friends updated successfully');
@@ -200,7 +238,7 @@ const AdminDashboard = () => {
 
     try {
       setDeletingUserId(userId);
-      await axiosInstance.delete(`/admin/users/${userId}`);
+      await axiosInstance.delete(`/api/admin/users/${userId}`);
       setSuccess('User deleted successfully');
       setUsers(users.filter(u => u._id !== userId));
       setCurrentPage(1);
@@ -213,133 +251,121 @@ const AdminDashboard = () => {
   };
 
   if (!user?.isAdmin) {
-    return <div className="p-4 text-red-600">Admin access required</div>;
+    return (
+      <Layout>
+        <div className="p-4 text-red-600">Admin access required</div>
+      </Layout>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
-      <PageHeader title="Admin Dashboard" />
+    <Layout>
+      <PageHeader 
+        title="Admin Dashboard" 
+        subtitle={`Managing ${filteredUsers.length} user${filteredUsers.length !== 1 ? 's' : ''}`}
+      />
 
-      <div className="max-w-full mx-auto px-4 py-6">
-        {error && (
-          <Alert
-            type="error"
-            onClose={() => setError('')}
-          >
-            {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert
-            type="success"
-            onClose={() => setSuccess('')}
-          >
-            {success}
-          </Alert>
-        )}
+      {error && (
+        <Alert type="error" onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert type="success" onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
+      )}
 
+      <div className="grid gap-4">
         {/* Create User Section */}
-        <Card className="mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-white">User Management</h2>
-            <Button
-              onClick={() => setShowCreateUser(!showCreateUser)}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {showCreateUser ? 'Cancel' : '+ Create User'}
+        <Card title="Create New User">
+          {!showCreateUser ? (
+            <Button onClick={() => setShowCreateUser(true)} className="w-full">
+              + Add User
             </Button>
-          </div>
+          ) : (
+            <form onSubmit={handleCreateUser} className="space-y-4">
+              <FormField 
+                label="Name" 
+                value={formData.name}
+                onChange={(v) => {
+                  setFormData({ ...formData, name: v });
+                  if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
+                }}
+                placeholder="Full name"
+              />
+              {formErrors.name && <p className="text-red-500 text-sm">{formErrors.name}</p>}
 
-          {showCreateUser && (
-            <form onSubmit={handleCreateUser} className="bg-slate-700 p-4 rounded-lg mb-4 space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <input
-                    type="text"
-                    placeholder="Name"
-                    value={formData.name}
-                    onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
-                      if (formErrors.name) setFormErrors({ ...formErrors, name: '' });
-                    }}
-                    className={`w-full bg-slate-600 text-white px-3 py-2 rounded border focus:outline-none focus:border-blue-500 ${
-                      formErrors.name ? 'border-red-500' : 'border-slate-500'
-                    }`}
-                  />
-                  {formErrors.name && <p className="text-red-400 text-sm mt-1">{formErrors.name}</p>}
-                </div>
-                <div>
-                  <input
-                    type="email"
-                    placeholder="Email"
-                    value={formData.email}
-                    onChange={(e) => {
-                      setFormData({ ...formData, email: e.target.value });
-                      if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
-                    }}
-                    className={`w-full bg-slate-600 text-white px-3 py-2 rounded border focus:outline-none focus:border-blue-500 ${
-                      formErrors.email ? 'border-red-500' : 'border-slate-500'
-                    }`}
-                  />
-                  {formErrors.email && <p className="text-red-400 text-sm mt-1">{formErrors.email}</p>}
-                </div>
-                <div>
-                  <input
-                    type="password"
-                    placeholder="Password (8+ chars, uppercase, lowercase, number)"
-                    value={formData.password}
-                    onChange={(e) => {
-                      setFormData({ ...formData, password: e.target.value });
-                      if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
-                    }}
-                    className={`w-full bg-slate-600 text-white px-3 py-2 rounded border focus:outline-none focus:border-blue-500 ${
-                      formErrors.password ? 'border-red-500' : 'border-slate-500'
-                    }`}
-                  />
-                  {formErrors.password && <p className="text-red-400 text-sm mt-1">{formErrors.password}</p>}
-                </div>
-                <div>
-                  <input
-                    type="number"
-                    placeholder="Max Friends (1-100)"
-                    value={formData.maxFriendsAllowed}
-                    onChange={(e) => {
-                      setFormData({ ...formData, maxFriendsAllowed: e.target.value });
-                      if (formErrors.maxFriendsAllowed) setFormErrors({ ...formErrors, maxFriendsAllowed: '' });
-                    }}
-                    className={`w-full bg-slate-600 text-white px-3 py-2 rounded border focus:outline-none focus:border-blue-500 ${
-                      formErrors.maxFriendsAllowed ? 'border-red-500' : 'border-slate-500'
-                    }`}
-                  />
-                  {formErrors.maxFriendsAllowed && <p className="text-red-400 text-sm mt-1">{formErrors.maxFriendsAllowed}</p>}
-                </div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.isAdmin}
-                    onChange={(e) => setFormData({ ...formData, isAdmin: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-white">Make Admin</span>
-                </label>
+              <FormField 
+                label="Email" 
+                type="email"
+                value={formData.email}
+                onChange={(v) => {
+                  setFormData({ ...formData, email: v });
+                  if (formErrors.email) setFormErrors({ ...formErrors, email: '' });
+                }}
+                placeholder="user@example.com"
+              />
+              {formErrors.email && <p className="text-red-500 text-sm">{formErrors.email}</p>}
+
+              <FormField 
+                label="Password" 
+                type="password"
+                value={formData.password}
+                onChange={(v) => {
+                  setFormData({ ...formData, password: v });
+                  if (formErrors.password) setFormErrors({ ...formErrors, password: '' });
+                }}
+                placeholder="Minimum 8 characters with uppercase, lowercase, and number"
+              />
+              {formErrors.password && <p className="text-red-500 text-sm">{formErrors.password}</p>}
+
+              <FormField 
+                label="Max Friends Allowed" 
+                type="number"
+                value={formData.maxFriendsAllowed}
+                onChange={(v) => {
+                  setFormData({ ...formData, maxFriendsAllowed: v });
+                  if (formErrors.maxFriendsAllowed) setFormErrors({ ...formErrors, maxFriendsAllowed: '' });
+                }}
+                placeholder="1-100"
+              />
+              {formErrors.maxFriendsAllowed && <p className="text-red-500 text-sm">{formErrors.maxFriendsAllowed}</p>}
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.isAdmin}
+                  onChange={(e) => setFormData({ ...formData, isAdmin: e.target.checked })}
+                  className="w-4 h-4 rounded"
+                />
+                <span className="text-slate-700 font-medium">Make Admin</span>
+              </label>
+
+              <div className="flex gap-2 pt-2">
+                <Button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="flex-1"
+                >
+                  {submitting ? 'Creating...' : 'Create User'}
+                </Button>
+                <Button 
+                  type="button" 
+                  onClick={() => setShowCreateUser(false)}
+                  className="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-900"
+                >
+                  Cancel
+                </Button>
               </div>
-              <Button
-                type="submit"
-                disabled={submitting}
-                className="mt-4 bg-green-600 hover:bg-green-700 w-full disabled:opacity-50"
-              >
-                {submitting ? 'Creating...' : 'Create User'}
-              </Button>
             </form>
           )}
         </Card>
 
         {/* Users List */}
-        <Card>
-          <div className="mb-4">
-            <h2 className="text-2xl font-bold text-white mb-4">All Users ({filteredUsers.length})</h2>
-            
-            {users.length > 0 && (
+        <Card title="All Users">
+          {users.length > 0 && (
+            <div className="mb-4">
               <input
                 type="text"
                 placeholder="Search by name or email..."
@@ -348,101 +374,99 @@ const AdminDashboard = () => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full bg-slate-600 text-white px-3 py-2 rounded border border-slate-500 focus:outline-none focus:border-blue-500"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               />
-            )}
-          </div>
+            </div>
+          )}
 
           {loading ? (
-            <div className="text-center text-gray-400 py-8">Loading users...</div>
+            <div className="text-center py-8 text-slate-600">Loading users...</div>
           ) : users.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">No users found</div>
+            <div className="text-center py-8 text-slate-600">No users found</div>
           ) : paginatedUsers.length === 0 ? (
-            <div className="text-center text-gray-400 py-8">No users match your search</div>
+            <div className="text-center py-8 text-slate-600">No users match your search</div>
           ) : (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-white text-sm">
-                  <thead className="bg-slate-700">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Name</th>
-                      <th className="px-4 py-2 text-left">Email</th>
-                      <th className="px-4 py-2 text-center">Max Friends</th>
-                      <th className="px-4 py-2 text-center">Role</th>
-                      <th className="px-4 py-2 text-center">Status</th>
-                      <th className="px-4 py-2 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedUsers.map((u) => (
-                      <tr key={u._id} className="border-b border-slate-600 hover:bg-slate-700 transition">
-                        <td className="px-4 py-2 font-semibold">{u.name}</td>
-                        <td className="px-4 py-2 text-sm">{u.email}</td>
-                        <td className="px-4 py-2 text-center">
-                          <button
-                            onClick={() => handleUpdateMaxFriends(u._id)}
-                            className="text-blue-400 hover:text-blue-300 underline cursor-pointer"
-                          >
-                            {u.maxFriendsAllowed}
-                          </button>
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          {u.isAdmin ? (
-                            <span className="bg-purple-600 px-2 py-1 rounded text-xs font-semibold">Admin</span>
-                          ) : (
-                            <span className="bg-slate-600 px-2 py-1 rounded text-xs">User</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          {u.isBlocked ? (
-                            <span className="bg-red-600 px-2 py-1 rounded text-xs font-semibold">Blocked</span>
-                          ) : (
-                            <span className="bg-green-600 px-2 py-1 rounded text-xs font-semibold">Active</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-center space-x-2">
-                          <button
-                            onClick={() => handleToggleBlock(u._id, u.isBlocked)}
-                            disabled={blockingUserId === u._id}
-                            className={`px-2 py-1 rounded text-white text-xs font-semibold transition disabled:opacity-50 ${
-                              u.isBlocked
-                                ? 'bg-green-600 hover:bg-green-700'
-                                : 'bg-red-600 hover:bg-red-700'
-                            }`}
-                          >
-                            {blockingUserId === u._id ? '...' : u.isBlocked ? 'Unblock' : 'Block'}
-                          </button>
-                          <button
-                            onClick={() => handleDeleteUser(u._id)}
-                            disabled={deletingUserId === u._id}
-                            className="px-2 py-1 rounded text-white text-xs font-semibold bg-red-700 hover:bg-red-800 transition disabled:opacity-50"
-                          >
-                            {deletingUserId === u._id ? '...' : 'Delete'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2">
+                {paginatedUsers.map((u) => (
+                  <div 
+                    key={u._id} 
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-slate-900">{u.name}</div>
+                      <div className="text-sm text-slate-600">{u.email}</div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <div className="text-center px-2 py-1 bg-slate-100 rounded text-xs">
+                        <div className="text-slate-600">Friends</div>
+                        <button
+                          onClick={() => handleUpdateMaxFriends(u._id)}
+                          className="font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                        >
+                          {u.maxFriendsAllowed}
+                        </button>
+                      </div>
+
+                      <div className="text-center px-2 py-1 rounded text-xs font-semibold">
+                        {u.isAdmin ? (
+                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">Admin</span>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded">User</span>
+                        )}
+                      </div>
+
+                      <div className="text-center px-2 py-1 rounded text-xs font-semibold">
+                        {u.isBlocked ? (
+                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded">Blocked</span>
+                        ) : (
+                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 sm:flex-col">
+                      <Button
+                        onClick={() => handleToggleBlock(u._id, u.isBlocked)}
+                        disabled={blockingUserId === u._id}
+                        className={`flex-1 text-xs py-1 ${
+                          u.isBlocked
+                            ? 'bg-green-500 hover:bg-green-600'
+                            : 'bg-yellow-500 hover:bg-yellow-600'
+                        } disabled:opacity-50`}
+                      >
+                        {blockingUserId === u._id ? '...' : u.isBlocked ? 'Unblock' : 'Block'}
+                      </Button>
+                      <Button
+                        onClick={() => handleDeleteUser(u._id)}
+                        disabled={deletingUserId === u._id}
+                        className="flex-1 text-xs py-1 bg-red-500 hover:bg-red-600 disabled:opacity-50"
+                      >
+                        {deletingUserId === u._id ? '...' : 'Delete'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="mt-4 flex justify-between items-center">
+                <div className="mt-4 flex justify-between items-center text-sm">
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1 rounded bg-slate-600 text-white text-sm disabled:opacity-50 hover:bg-slate-500"
+                    className="px-3 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   >
                     Previous
                   </button>
-                  <span className="text-slate-300 text-sm">
+                  <span className="text-slate-600">
                     Page {currentPage} of {totalPages}
                   </span>
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded bg-slate-600 text-white text-sm disabled:opacity-50 hover:bg-slate-500"
+                    className="px-3 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   >
                     Next
                   </button>
@@ -452,8 +476,7 @@ const AdminDashboard = () => {
           )}
         </Card>
       </div>
-    </div>
+    </Layout>
   );
 };
-
 export default AdminDashboard;

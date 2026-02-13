@@ -1,4 +1,5 @@
 import Friend from '../models/Friend.model.js';
+import User from '../models/User.model.js';
 
 export const createFriend = async (req, res, next) => {
   try {
@@ -7,6 +8,20 @@ export const createFriend = async (req, res, next) => {
     // Validate input
     if (!friendName) {
       return res.status(400).json({ message: 'Friend name is required' });
+    }
+
+    // Get user to check max friends allowed
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Count existing friends
+    const friendCount = await Friend.countDocuments({ userId: req.userId });
+    if (friendCount >= user.maxFriendsAllowed) {
+      return res.status(400).json({
+        message: `You have reached the maximum number of friends (${user.maxFriendsAllowed}). Please contact admin to increase the limit.`,
+      });
     }
 
     // Create friend

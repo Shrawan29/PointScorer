@@ -42,28 +42,41 @@ const sanitizeRules = (rules) => {
 
 export const createRuleSet = async (req, res, next) => {
 	try {
-		const { friendId, rulesetName, rules } = req.body;
+		const { friendId, rulesetName, rules, isTemplate = false, description = '' } = req.body;
 
-		if (!friendId || !rulesetName || !rules) {
+		// Validate required fields
+		if (!rulesetName || !rules) {
 			return res
 				.status(400)
-				.json({ message: 'friendId, rulesetName, and rules are required' });
+				.json({ message: 'rulesetName and rules are required' });
 		}
 
-		if (!mongoose.Types.ObjectId.isValid(friendId)) {
+		// If not a template, friendId is required
+		if (!isTemplate && !friendId) {
+			return res
+				.status(400)
+				.json({ message: 'friendId is required for non-template rulesets' });
+		}
+
+		if (friendId && !mongoose.Types.ObjectId.isValid(friendId)) {
 			return res.status(400).json({ message: 'Invalid friendId' });
 		}
 
-		const friend = await Friend.findOne({ _id: friendId, userId: req.userId });
-		if (!friend) {
-			return res.status(404).json({ message: 'Friend not found' });
+		// Verify friend ownership if friendId is provided
+		if (friendId) {
+			const friend = await Friend.findOne({ _id: friendId, userId: req.userId });
+			if (!friend) {
+				return res.status(404).json({ message: 'Friend not found' });
+			}
 		}
 
 		const ruleset = await RuleSet.create({
 			userId: req.userId,
-			friendId,
+			friendId: friendId || null,
 			rulesetName,
 			rules: sanitizeRules(rules),
+			isTemplate,
+			description,
 		});
 
 		return res.status(201).json(ruleset);
@@ -164,10 +177,33 @@ export const deleteRuleSet = async (req, res, next) => {
 	}
 };
 
+export const getAllUserRuleSets = async (req, res, next) => {
+	try {
+		const ruleSets = await RuleSet.find({ userId: req.userId }).sort({ createdAt: -1 });
+		return res.status(200).json(ruleSets);
+	} catch (error) {
+		next(error);
+	}
+};
+
+export const getRuleSetTemplates = async (req, res, next) => {
+	try {
+		const templates = await RuleSet.find({
+			userId: req.userId,
+			isTemplate: true,
+		}).sort({ createdAt: -1 });
+		return res.status(200).json(templates);
+	} catch (error) {
+		next(error);
+	}
+};
+
 export default {
 	createRuleSet,
 	getRuleSetsByFriend,
 	getRuleSetById,
 	updateRuleSet,
 	deleteRuleSet,
+	getAllUserRuleSets,
+	getRuleSetTemplates,
 };

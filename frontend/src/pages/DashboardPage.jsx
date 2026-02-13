@@ -85,6 +85,15 @@ export const DashboardPage = () => {
             </div>
           )}
         </Card>
+
+        <Card title="Scoring Rules">
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600">Create reusable ruleset templates for scoring.</p>
+            <Link to="/rulesets/new-template">
+              <Button>Create Rule Template</Button>
+            </Link>
+          </div>
+        </Card>
       </div>
     </Layout>
   );

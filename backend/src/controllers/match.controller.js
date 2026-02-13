@@ -6,6 +6,7 @@ import PlayerSelection from '../models/PlayerSelection.model.js';
 import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import RawPlayerStats from '../models/RawPlayerStats.model.js';
 import RuleSet from '../models/RuleSet.model.js';
+import MatchHistory from '../models/MatchHistory.model.js';
 import { scrapeTodayAndLiveMatches, scrapeUpcomingMatches, scrapeMatchDetails } from '../services/scraper.service.js';
 
 const normalizeStatusBucket = (match) => {
@@ -113,6 +114,19 @@ export const createMatchSession = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid rulesetId' });
 		}
 
+		// Check if user has already played this match with this friend
+		const existingMatch = await MatchHistory.findOne({
+			userId: req.userId,
+			friendId,
+			matchId: realMatchId,
+		});
+
+		if (existingMatch) {
+			return res.status(400).json({
+				message: `You have already played this match (${realMatchName}) with this friend. You can only play each match with the same friend once.`,
+			});
+		}
+
 		const friend = await Friend.findOne({ _id: friendId, userId: req.userId });
 		if (!friend) {
 			return res.status(404).json({ message: 'Friend not found' });
@@ -121,7 +135,6 @@ export const createMatchSession = async (req, res, next) => {
 		const ruleset = await RuleSet.findOne({
 			_id: rulesetId,
 			userId: req.userId,
-			friendId,
 		});
 		if (!ruleset) {
 			return res.status(404).json({ message: 'RuleSet not found' });

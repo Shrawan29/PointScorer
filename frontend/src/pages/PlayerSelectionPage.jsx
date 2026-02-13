@@ -53,6 +53,49 @@ export const PlayerSelectionPage = () => {
 		return list.filter((p) => String(p).toLowerCase().includes(q));
 	}, [squads, search]);
 
+	// Group players by team
+	const playersByTeam = useMemo(() => {
+		const grouped = {};
+		const list = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
+		
+		// If squads has team structure, use it; otherwise treat all as one team
+		if (squads?.team1 && squads?.team2) {
+			grouped[squads.team1.name || 'Team 1'] = squads.team1.players || [];
+			grouped[squads.team2.name || 'Team 2'] = squads.team2.players || [];
+		} else {
+			// Fallback: try to use squad structure
+			if (Array.isArray(squads?.squads)) {
+				squads.squads.forEach(team => {
+					if (team.name && Array.isArray(team.players)) {
+						grouped[team.name] = team.players;
+					}
+				});
+			}
+			// If no team structure, group all players under "All Players"
+			if (Object.keys(grouped).length === 0) {
+				grouped['All Players'] = list;
+			}
+		}
+		
+		return grouped;
+	}, [squads]);
+
+	const filteredPlayersByTeam = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return playersByTeam;
+
+		const filtered = {};
+		Object.entries(playersByTeam).forEach(([team, players]) => {
+			const filteredPlayers = players.filter((p) => 
+				String(p).toLowerCase().includes(q)
+			);
+			if (filteredPlayers.length > 0) {
+				filtered[team] = filteredPlayers;
+			}
+		});
+		return filtered;
+	}, [playersByTeam, search]);
+
 	const countsOk = useMemo(() => {
 		const u = userPlayers.length;
 		const f = friendPlayers.length;
@@ -225,53 +268,60 @@ export const PlayerSelectionPage = () => {
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
                 />
                 <div className="mt-3 max-h-64 overflow-auto border rounded-md">
-                  {availablePlayers.length === 0 ? (
+                  {Object.keys(filteredPlayersByTeam).length === 0 ? (
                     <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
                   ) : (
                     <div className="divide-y">
-                      {availablePlayers.map((p) => {
-                        const inUser = userPlayers.includes(p);
-                        const inFriend = friendPlayers.includes(p);
-                        return (
-                          <div key={p} className="p-2 flex items-center justify-between gap-2">
-                            <div className="text-xs sm:text-sm text-slate-900 truncate">{p}</div>
-                            <div className="flex gap-1">
-                              <button
-                                type="button"
-                                disabled={isFrozen || (inFriend && !inUser) || (!inUser && userPlayers.length >= 9)}
-                                onClick={() => {
-                                  setUserPlayers((prev) =>
-                                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-                                  );
-                                }}
-                                className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
-                                  inUser
-                                    ? 'bg-slate-900 text-white border-slate-900'
-                                    : 'bg-white text-slate-700 border-slate-200'
-                                }`}
-                              >
-                                Me
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isFrozen || (inUser && !inFriend) || (!inFriend && friendPlayers.length >= 9)}
-                                onClick={() => {
-                                  setFriendPlayers((prev) =>
-                                    prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
-                                  );
-                                }}
-                                className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
-                                  inFriend
-                                    ? 'bg-slate-900 text-white border-slate-900'
-                                    : 'bg-white text-slate-700 border-slate-200'
-                                }`}
-                              >
-                                Friend
-                              </button>
-                            </div>
+                      {Object.entries(filteredPlayersByTeam).map(([teamName, players]) => (
+                        <div key={teamName}>
+                          <div className="px-3 py-2 bg-slate-100 font-semibold text-xs sm:text-sm text-slate-700 sticky top-0">
+                            {teamName}
                           </div>
-                        );
-                      })}
+                          {players.map((p) => {
+                            const inUser = userPlayers.includes(p);
+                            const inFriend = friendPlayers.includes(p);
+                            return (
+                              <div key={p} className="p-2 flex items-center justify-between gap-2 hover:bg-slate-50">
+                                <div className="text-xs sm:text-sm text-slate-900 truncate">{p}</div>
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    disabled={isFrozen || (inFriend && !inUser) || (!inUser && userPlayers.length >= 9)}
+                                    onClick={() => {
+                                      setUserPlayers((prev) =>
+                                        prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                                      );
+                                    }}
+                                    className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                      inUser
+                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        : 'bg-white text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    Me
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isFrozen || (inUser && !inFriend) || (!inFriend && friendPlayers.length >= 9)}
+                                    onClick={() => {
+                                      setFriendPlayers((prev) =>
+                                        prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
+                                      );
+                                    }}
+                                    className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                      inFriend
+                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        : 'bg-white text-slate-700 border-slate-200'
+                                    }`}
+                                  >
+                                    Friend
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

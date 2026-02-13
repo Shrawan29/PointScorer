@@ -18,6 +18,7 @@ import RulesetDetailPage from './pages/RulesetDetailPage.jsx';
 import RulesetListPage from './pages/RulesetListPage.jsx';
 import SelectFriend from './pages/SelectFriend.jsx';
 import SharePage from './pages/SharePage.jsx';
+import AdminDashboard from './pages/AdminDashboard.jsx';
 
 const RootRedirect = () => {
 	const token = localStorage.getItem('token');
@@ -33,11 +34,13 @@ export const App = () => {
 
 			<Route element={<ProtectedRoute />}>
 				<Route path="/dashboard" element={<DashboardPage />} />
+				<Route path="/admin" element={<AdminDashboard />} />
 				<Route path="/matches/:matchId" element={<MatchDetails />} />
 				<Route path="/select-friend/:matchId" element={<SelectFriend />} />
 				<Route path="/friends" element={<FriendsListPage />} />
 				<Route path="/friends/:friendId" element={<FriendDetailPage />} />
 
+				<Route path="/rulesets/new-template" element={<RulesetCreatePage />} />
 				<Route path="/friends/:friendId/rulesets" element={<RulesetListPage />} />
 				<Route path="/friends/:friendId/rulesets/new" element={<RulesetCreatePage />} />
 				<Route path="/friends/:friendId/rulesets/:rulesetId" element={<RulesetDetailPage />} />

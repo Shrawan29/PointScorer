@@ -36,9 +36,11 @@ export const RulesetCreatePage = () => {
   const navigate = useNavigate();
 
   const [rulesetName, setRulesetName] = useState('');
+  const [description, setDescription] = useState('');
   const [rules, setRules] = useState(DEFAULT_RULES);
   const [captainMultiplierEnabled, setCaptainMultiplierEnabled] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [isTemplate, setIsTemplate] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -78,11 +80,18 @@ export const RulesetCreatePage = () => {
         },
       ];
       const res = await axiosInstance.post('/api/rulesets', {
-        friendId,
+        friendId: isTemplate ? null : friendId,
         rulesetName,
+        description,
         rules: rulesWithCaptain,
+        isTemplate,
       });
-      navigate(`/friends/${friendId}/rulesets/${res.data._id}`, { replace: true });
+      
+      if (isTemplate) {
+        navigate('/rulesets', { replace: true });
+      } else {
+        navigate(`/friends/${friendId}/rulesets/${res.data._id}`, { replace: true });
+      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to create ruleset');
     } finally {
@@ -96,7 +105,7 @@ export const RulesetCreatePage = () => {
         title="Create Ruleset"
         subtitle="All scoring events are listed. Just toggle and set points." 
         actions={
-          <Link to={`/friends/${friendId}/rulesets`}>
+          <Link to={isTemplate ? '/rulesets' : `/friends/${friendId}/rulesets`}>
             <Button variant="secondary">Back</Button>
           </Link>
         }
@@ -113,6 +122,25 @@ export const RulesetCreatePage = () => {
               onChange={setRulesetName}
               placeholder="e.g., Weekend League"
             />
+            
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isTemplate}
+                onChange={(e) => setIsTemplate(e.target.checked)}
+              />
+              <div className="text-sm text-slate-700">Create as reusable template</div>
+            </label>
+            
+            {isTemplate && (
+              <FormField
+                label="Description"
+                value={description}
+                onChange={setDescription}
+                placeholder="Describe when to use this template..."
+              />
+            )}
+            
             <div className="text-xs text-slate-600">
               Tip: you can tweak rules later; it affects only future sessions.
             </div>

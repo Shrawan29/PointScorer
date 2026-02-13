@@ -5,6 +5,7 @@ import PlayerSelection from '../models/PlayerSelection.model.js';
 import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import RawPlayerStats from '../models/RawPlayerStats.model.js';
 import RuleSet from '../models/RuleSet.model.js';
+import MatchHistory from '../models/MatchHistory.model.js';
 import { calculatePlayerPoints } from '../services/pointsEngine.service.js';
 import { buildDetailedBreakdownForSessionId } from '../services/breakdown.service.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
@@ -140,6 +141,18 @@ export const calculatePointsForSession = async (req, res, next) => {
 			.filter((r) => String(r?.team || 'USER') === 'FRIEND')
 			.reduce((sum, row) => sum + (typeof row.totalPoints === 'number' ? row.totalPoints : 0), 0);
 		const totalPoints = userTotalPoints + friendTotalPoints;
+
+		// Record the match in MatchHistory to prevent playing the same match with the same friend again
+		await MatchHistory.updateOne(
+			{ userId: session.userId, friendId: session.friendId, matchId: session.realMatchId },
+			{
+				$set: {
+					matchName: session.realMatchName,
+					playedAt: new Date(),
+				},
+			},
+			{ upsert: true }
+		);
 
 		return res.status(201).json({
 			message: 'Points calculated successfully',

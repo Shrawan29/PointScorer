@@ -32,13 +32,23 @@ const ruleSetSchema = new mongoose.Schema(
     friendId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Friend',
-      required: true,
+      required: function() {
+        return !this.isTemplate; // Only required if not a template
+      },
     },
     rulesetName: {
       type: String,
       required: true,
     },
     rules: [ruleSchema],
+    isTemplate: {
+      type: Boolean,
+      default: false, // false = friend-specific, true = reusable template
+    },
+    description: {
+      type: String,
+      default: '',
+    },
   },
   { timestamps: true }
 );

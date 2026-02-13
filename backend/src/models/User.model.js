@@ -27,6 +27,20 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+
+    // Admin fields
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    isBlocked: {
+      type: Boolean,
+      default: false,
+    },
+    maxFriendsAllowed: {
+      type: Number,
+      default: 10,
+    },
   },
   { timestamps: true }
 );

@@ -5,6 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 import friendRoutes from './routes/friend.routes.js';
 import rulesetRoutes from './routes/ruleset.routes.js';
 import matchRoutes from './routes/match.routes.js';
@@ -42,6 +43,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/rulesets', rulesetRoutes);
 app.use('/api/matches', matchRoutes);

@@ -40,6 +40,11 @@ export const Layout = ({ children }) => {
             <NavLink to="/friends" className={navLinkClass}>
               Friends
             </NavLink>
+            {user?.isAdmin && (
+              <NavLink to="/admin" className={navLinkClass}>
+                Admin
+              </NavLink>
+            )}
           </nav>
         </div>
       </header>

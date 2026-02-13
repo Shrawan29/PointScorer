@@ -161,15 +161,6 @@ const AdminDashboard = () => {
       setBlockingUserId(null);
     }
   };
-      setSuccess(response.data.message);
-      setUsers(users.map(u => u._id === userId ? response.data.user : u));
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update user');
-    } finally {
-      setBlockingUserId(null);
-    }
-  };
 
   const handleUpdateMaxFriends = async (userId) => {
     const userToUpdate = users.find(u => u._id === userId);
@@ -185,15 +176,6 @@ const AdminDashboard = () => {
 
     try {
       const response = await axiosInstance.put(`/api/admin/users/${userId}`, {
-        maxFriendsAllowed: parseInt(newMax),
-      });
-      setSuccess('Max friends updated successfully');
-      setUsers(users.map(u => u._id === userId ? response.data.user : u));
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update user');
-    }
-  };
         maxFriendsAllowed: parseInt(newMax),
       });
       setSuccess('Max friends updated successfully');

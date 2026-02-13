@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
 import Alert from '../components/Alert.jsx';
@@ -49,10 +49,6 @@ export const LoginPage = () => {
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
-
-          <div className="text-xs text-slate-600 mt-3 text-center">
-            No account? <Link className="text-slate-900 underline" to="/register">Register</Link>
-          </div>
         </Card>
       </div>
     </div>

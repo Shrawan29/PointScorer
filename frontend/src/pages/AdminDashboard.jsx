@@ -147,24 +147,6 @@ const AdminDashboard = () => {
       setSubmitting(false);
     }
   };
-      setSuccess('User created successfully');
-      setUsers([response.data.user, ...users]);
-      setFormData({
-        name: '',
-        email: '',
-        password: '',
-        isAdmin: false,
-        maxFriendsAllowed: 10,
-      });
-      setFormErrors({});
-      setShowCreateUser(false);
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create user');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const handleToggleBlock = async (userId, currentBlockStatus) => {
     try {

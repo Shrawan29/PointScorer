@@ -115,9 +115,9 @@ export const createUser = async (req, res, next) => {
 // Get user by ID (admin only)
 export const getUserById = async (req, res, next) => {
   try {
-    const { userId: targetUserId } = req.params;
+    const { userId } = req.params;
 
-    const user = await User.findById(targetUserId).select('-password');
+    const user = await User.findById(userId).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -131,16 +131,16 @@ export const getUserById = async (req, res, next) => {
 // Update user settings (admin only)
 export const updateUser = async (req, res, next) => {
   try {
-    const { userId: targetUserId } = req.params;
+    const { userId } = req.params;
     const { name, isAdmin, isBlocked, maxFriendsAllowed } = req.body;
     const adminId = req.userId;
 
     // Prevent self-demotion
-    if (targetUserId === adminId && isAdmin === false) {
+    if (userId === adminId && isAdmin === false) {
       return res.status(400).json({ message: 'Cannot demote yourself from admin' });
     }
 
-    const user = await User.findById(targetUserId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -186,9 +186,9 @@ export const updateUser = async (req, res, next) => {
 // Block/Unblock user (admin only)
 export const toggleUserBlock = async (req, res, next) => {
   try {
-    const { userId: targetUserId } = req.params;
+    const { userId } = req.params;
 
-    const user = await User.findById(targetUserId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -215,15 +215,15 @@ export const toggleUserBlock = async (req, res, next) => {
 // Delete user (admin only)
 export const deleteUser = async (req, res, next) => {
   try {
-    const { userId: targetUserId } = req.params;
+    const { userId } = req.params;
     const adminId = req.userId;
 
     // Prevent self-deletion
-    if (targetUserId === adminId) {
+    if (userId === adminId) {
       return res.status(400).json({ message: 'Cannot delete your own account' });
     }
 
-    const user = await User.findByIdAndDelete(targetUserId);
+    const user = await User.findByIdAndDelete(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }

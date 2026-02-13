@@ -35,25 +35,6 @@ const validateMaxFriends = (max) => {
   return !isNaN(num) && num > 0 && num <= 100;
 };
 
-// Check if user is admin
-export const checkAdmin = async (req, res, next) => {
-  try {
-    const userId = req.userId;
-    if (!userId) {
-      return res.status(401).json({ message: 'Unauthorized' });
-    }
-
-    const user = await User.findById(userId);
-    if (!user || !user.isAdmin) {
-      return res.status(403).json({ message: 'Admin access required' });
-    }
-
-    next();
-  } catch (error) {
-    next(error);
-  }
-};
-
 // Get all users (admin only)
 export const getAllUsers = async (req, res, next) => {
   try {

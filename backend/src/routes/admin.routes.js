@@ -1,6 +1,5 @@
 import express from 'express';
 import {
-  checkAdmin,
   getAllUsers,
   createUser,
   getUserById,
@@ -9,22 +8,34 @@ import {
   deleteUser,
 } from '../controllers/admin.controller.js';
 import authMiddleware from '../middlewares/auth.middleware.js';
+import User from '../models/User.model.js';
 
 const router = express.Router();
 
 // All admin routes require auth
 router.use(authMiddleware);
 
-// Middleware to check if user is admin
-router.use(async (req, res, next) => {
-  const adminCheck = checkAdmin.bind({});
-  adminCheck(req, res, () => {
-    if (res.statusCode && res.statusCode >= 400) {
-      return; // Error already sent
+// Admin check middleware
+const adminCheckMiddleware = async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
     }
+
+    const user = await User.findById(userId);
+    if (!user || !user.isAdmin) {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+
     next();
-  });
-});
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Apply admin check to all routes
+router.use(adminCheckMiddleware);
 
 // Admin user management routes
 router.get('/users', getAllUsers);

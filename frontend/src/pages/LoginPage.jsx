@@ -6,6 +6,7 @@ import Alert from '../components/Alert.jsx';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import FormField from '../components/FormField.jsx';
+import SessionConflictModal from '../components/SessionConflictModal.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 export const LoginPage = () => {
@@ -16,22 +17,59 @@ export const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sessionConflict, setSessionConflict] = useState(false);
+  const [forceLogoutLoading, setForceLogoutLoading] = useState(false);
+  const [forceLogoutError, setForceLogoutError] = useState('');
 
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
+    setSessionConflict(false);
+    setForceLogoutError('');
 
     try {
       const res = await axiosInstance.post('/api/auth/login', { email, password });
       login(res.data.token, res.data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setError(err?.response?.data?.message || 'Login failed');
+      if (err?.response?.status === 409) {
+        setSessionConflict(true);
+      } else {
+        setError(err?.response?.data?.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const handleForceLogout = async (email, password) => {
+    setForceLogoutError('');
+    setForceLogoutLoading(true);
+
+    try {
+      const res = await axiosInstance.post('/api/auth/force-logout-other-session', { email, password });
+      login(res.data.token, res.data.user);
+      setSessionConflict(false);
+      navigate('/dashboard', { replace: true });
+    } catch (err) {
+      setForceLogoutError(err?.response?.data?.message || 'Failed to force logout other session');
+    } finally {
+      setForceLogoutLoading(false);
+    }
+  };
+
+  if (sessionConflict) {
+    return (
+      <SessionConflictModal
+        email={email}
+        password={password}
+        onForceLogout={handleForceLogout}
+        loading={forceLogoutLoading}
+        error={forceLogoutError}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-8">

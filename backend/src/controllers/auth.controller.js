@@ -130,4 +130,57 @@ export const logout = async (req, res, next) => {
 	}
 };
 
-export default { register, login, logout };
+export const forceLogoutOtherSession = async (req, res, next) => {
+	try {
+		const { email, password } = req.body;
+
+		// Validate input
+		if (!email || !password) {
+			return res.status(400).json({ message: 'Email and password are required' });
+		}
+
+		// Find user by email
+		const user = await User.findOne({ email });
+		if (!user) {
+			return res.status(401).json({ message: 'Invalid email or password' });
+		}
+
+		// Compare passwords
+		const isPasswordValid = await bcrypt.compare(password, user.password);
+		if (!isPasswordValid) {
+			return res.status(401).json({ message: 'Invalid email or password' });
+		}
+
+		// Clear the old session
+		user.activeSessionId = null;
+		user.activeSessionExpiresAt = null;
+		await user.save();
+
+		// Create new session for this device
+		const sessionId = newSessionId();
+		const expiresAt = new Date(Date.now() + parseExpiresInMs(ENV.JWT_EXPIRES_IN));
+		user.activeSessionId = sessionId;
+		user.activeSessionExpiresAt = expiresAt;
+		await user.save();
+
+		// Generate JWT
+		const token = jwt.sign({ userId: user._id, sessionId }, ENV.JWT_SECRET, {
+			expiresIn: ENV.JWT_EXPIRES_IN,
+		});
+
+		// Return token and user object (without password)
+		return res.status(200).json({
+			token,
+			user: {
+				id: user._id,
+				name: user.name,
+				email: user.email,
+				isAdmin: user.isAdmin,
+			},
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
+export default { register, login, logout, forceLogoutOtherSession };

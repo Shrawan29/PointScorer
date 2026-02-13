@@ -9,11 +9,11 @@ export const SessionConflictModal = ({ email, password, onForceLogout, loading, 
         <Card title="Session Conflict">
           <div className="space-y-4">
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-sm text-amber-900">
-                <strong>You are already logged in on another device.</strong>
+              <p className="text-sm text-amber-900 font-semibold">
+                You are already logged in on another device.
               </p>
-              <p className="text-sm text-amber-800 mt-2">
-                Your ID will be logged out from that device and you can login here.
+              <p className="text-sm text-amber-800 mt-3">
+                Your ID from that device will be <strong>logged out</strong> and <strong>opened here</strong>.
               </p>
             </div>
 
@@ -23,12 +23,12 @@ export const SessionConflictModal = ({ email, password, onForceLogout, loading, 
               </div>
             )}
 
-            <div className="space-y-2">
-              <p className="text-sm text-slate-600 font-medium">To proceed:</p>
-              <ol className="text-sm text-slate-600 space-y-1 list-decimal list-inside">
-                <li>Confirm your password below</li>
-                <li>We'll logout your other session</li>
-                <li>You'll be logged in here</li>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+              <p className="text-sm text-blue-900 font-semibold">What will happen:</p>
+              <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                <li>Confirm your password</li>
+                <li>Your other session will be logged out</li>
+                <li>You'll be logged in on this device</li>
               </ol>
             </div>
 
@@ -51,13 +51,13 @@ export const SessionConflictModal = ({ email, password, onForceLogout, loading, 
                 fullWidth
                 variant="primary"
               >
-                {loading ? 'Logging Out Other Device...' : 'Force Logout Other Device'}
+                {loading ? 'Logging Out Other Device...' : 'Logout Other Device & Login Here'}
               </Button>
             </div>
 
-            <div className="text-center pt-2">
-              <p className="text-xs text-slate-500">
-                Or wait for your other session to expire automatically.
+            <div className="text-center pt-2 border-t border-slate-200">
+              <p className="text-xs text-slate-500 mt-3">
+                Alternatively, you can logout there manually or wait for that session to expire.
               </p>
             </div>
           </div>

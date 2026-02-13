@@ -525,11 +525,6 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl) => {
 		playingXI: uniqueStrings(allPlayingXI.length > 0 ? allPlayingXI : allPlayers),
 	};
 };
-		sourceUrl: fetchedUrl,
-		players: allPlayers,
-		playingXI: uniqueStrings(playingXI),
-	};
-};
 
 const extractLines = ($el) => {
 	const text = $el

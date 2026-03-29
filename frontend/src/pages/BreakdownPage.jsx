@@ -47,7 +47,6 @@ export const BreakdownPage = () => {
 		() => ({
 			user: toNumber(data?.totals?.userTotalPoints),
 			friend: toNumber(data?.totals?.friendTotalPoints),
-			total: toNumber(data?.totals?.totalPoints),
 		}),
 		[data]
 	);
@@ -60,14 +59,17 @@ export const BreakdownPage = () => {
 
 	const winnerSummary = useMemo(() => {
 		const diff = Math.abs(totals.user - totals.friend);
+		const isCompleted = data?.matchState === 'COMPLETED' || data?.match?.status === 'COMPLETED';
 
 		if (totals.user === totals.friend) {
-			return 'Match tied';
+			return isCompleted ? 'Match tied' : 'Scores level';
 		}
 
 		const winner = totals.user > totals.friend ? userDisplayName : friendDisplayName;
-		return `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`;
-	}, [totals.user, totals.friend, userDisplayName, friendDisplayName]);
+		return isCompleted
+			? `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`
+			: `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`;
+	}, [totals.user, totals.friend, userDisplayName, friendDisplayName, data?.matchState, data?.match?.status]);
 
 	useEffect(() => {
 		const run = async () => {

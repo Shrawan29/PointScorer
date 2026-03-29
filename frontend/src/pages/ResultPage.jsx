@@ -53,13 +53,16 @@ export const ResultPage = () => {
     const userPoints = toNumber(data?.userTotalPoints);
     const friendPoints = toNumber(data?.friendTotalPoints);
     const diff = Math.abs(userPoints - friendPoints);
+    const isCompleted = data?.match?.status === 'COMPLETED' || data?.matchState === 'COMPLETED';
 
     if (userPoints === friendPoints) {
-      return 'Match tied';
+      return isCompleted ? 'Match tied' : 'Scores level';
     }
 
     const winner = userPoints > friendPoints ? userDisplayName : friendDisplayName;
-    return `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`;
+    return isCompleted
+      ? `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`
+      : `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`;
   }, [data, userDisplayName, friendDisplayName]);
 
 	const canRefresh = useMemo(

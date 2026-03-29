@@ -5,6 +5,7 @@ import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import RawPlayerStats from '../models/RawPlayerStats.model.js';
 import RuleSet from '../models/RuleSet.model.js';
+import { getCricbuzzMatchStateById } from './scraper.service.js';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -177,6 +178,11 @@ export const buildDetailedBreakdownForSessionId = async ({ sessionId, userId }) 
 		PlayerSelection.findOne({ sessionId }).lean(),
 	]);
 
+	const matchState =
+		session.status === 'COMPLETED'
+			? { state: 'COMPLETED' }
+			: await getCricbuzzMatchStateById(session.realMatchId).catch(() => ({ state: 'UNKNOWN' }));
+
 	if (!friend) {
 		const err = new Error('Friend not found');
 		err.statusCode = 404;
@@ -224,6 +230,7 @@ export const buildDetailedBreakdownForSessionId = async ({ sessionId, userId }) 
 	return {
 		sessionId: String(sessionId),
 		generatedAt: new Date().toISOString(),
+		matchState: matchState?.state || 'UNKNOWN',
 		match: {
 			realMatchId: session.realMatchId,
 			realMatchName: session.realMatchName,

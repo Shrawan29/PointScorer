@@ -23,6 +23,7 @@ import FriendPublicHomePage from './pages/FriendPublicHomePage.jsx';
 import FriendPublicResultPage from './pages/FriendPublicResultPage.jsx';
 import FriendPublicBreakdownPage from './pages/FriendPublicBreakdownPage.jsx';
 import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
+import RequestPasswordResetPage from './pages/RequestPasswordResetPage.jsx';
 
 const RootRedirect = () => {
 	const token = localStorage.getItem('token');
@@ -35,6 +36,7 @@ export const App = () => {
 			<Route path="/" element={<RootRedirect />} />
 			<Route path="/login" element={<LoginPage />} />
 			<Route path="/register" element={<RegisterPage />} />
+			<Route path="/request-password-reset" element={<RequestPasswordResetPage />} />
 			<Route path="/friend-view/:token" element={<FriendPublicHomePage />} />
 			<Route path="/friend-view/:token/sessions/:sessionId/result" element={<FriendPublicResultPage />} />
 			<Route path="/friend-view/:token/sessions/:sessionId/breakdown" element={<FriendPublicBreakdownPage />} />

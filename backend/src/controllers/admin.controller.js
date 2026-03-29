@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import User from '../models/User.model.js';
+import PasswordResetRequest from '../models/PasswordResetRequest.model.js';
 
 // Validation utilities
 const validateEmail = (email) => {
@@ -234,6 +235,76 @@ export const deleteUser = async (req, res, next) => {
   }
 };
 
+export const getPasswordResetRequests = async (req, res, next) => {
+  try {
+    const requestedStatus = String(req.query?.status || 'PENDING').toUpperCase();
+    const allowed = new Set(['PENDING', 'COMPLETED', 'REJECTED', 'ALL']);
+    const safeStatus = allowed.has(requestedStatus) ? requestedStatus : 'PENDING';
+
+    const filter = safeStatus === 'ALL' ? {} : { status: safeStatus };
+    const rows = await PasswordResetRequest.find(filter)
+      .populate('userId', 'name email isBlocked')
+      .populate('resolvedByAdminId', 'name email')
+      .sort({ requestedAt: -1 })
+      .lean();
+
+    return res.status(200).json(rows);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const setTemporaryPasswordForResetRequest = async (req, res, next) => {
+  try {
+    const { requestId } = req.params;
+    const { temporaryPassword, resolutionNote } = req.body || {};
+
+    if (!requestId) {
+      return res.status(400).json({ message: 'requestId is required' });
+    }
+    if (!temporaryPassword) {
+      return res.status(400).json({ message: 'temporaryPassword is required' });
+    }
+
+    const passwordValidation = validatePassword(String(temporaryPassword));
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+
+    const resetRequest = await PasswordResetRequest.findById(requestId);
+    if (!resetRequest) {
+      return res.status(404).json({ message: 'Password reset request not found' });
+    }
+    if (resetRequest.status !== 'PENDING') {
+      return res.status(409).json({ message: 'Password reset request is already resolved' });
+    }
+
+    const user = await User.findById(resetRequest.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(temporaryPassword), 10);
+    user.password = hashedPassword;
+    user.activeSessionId = null;
+    user.activeSessionExpiresAt = null;
+    await user.save();
+
+    resetRequest.status = 'COMPLETED';
+    resetRequest.resolvedAt = new Date();
+    resetRequest.resolvedByAdminId = req.userId;
+    resetRequest.resolutionNote = resolutionNote ? String(resolutionNote).trim() : 'Temporary password set by admin';
+    await resetRequest.save();
+
+    return res.status(200).json({
+      message: 'Temporary password set successfully. User must login again.',
+      request: resetRequest,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getAllUsers,
   createUser,
@@ -241,4 +312,6 @@ export default {
   updateUser,
   toggleUserBlock,
   deleteUser,
+  getPasswordResetRequests,
+  setTemporaryPasswordForResetRequest,
 };

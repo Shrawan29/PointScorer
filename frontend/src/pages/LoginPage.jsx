@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
 import Alert from '../components/Alert.jsx';
@@ -87,6 +87,13 @@ export const LoginPage = () => {
               {loading ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>
+
+			<div className="text-xs text-slate-600 mt-3 text-center">
+				Forgot password?{' '}
+				<Link className="text-slate-900 underline" to="/request-password-reset">
+					Request reset
+				</Link>
+			</div>
         </Card>
       </div>
     </div>

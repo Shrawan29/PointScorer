@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import User from '../models/User.model.js';
+import PasswordResetRequest from '../models/PasswordResetRequest.model.js';
 import ENV from '../config/env.js';
 
 const parseExpiresInMs = (value) => {
@@ -183,6 +184,46 @@ export const forceLogoutOtherSession = async (req, res, next) => {
 	}
 };
 
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const genericMessage = 'If the account exists, your reset request has been recorded.';
+    const user = await User.findOne({ email }).select('_id email').lean();
+    if (!user) {
+      return res.status(200).json({ message: genericMessage });
+    }
+
+    const requestedByIp = String(req.headers['x-forwarded-for'] || req.ip || '')
+      .split(',')[0]
+      .trim() || null;
+    const requestedUserAgent = String(req.get('user-agent') || '').trim() || null;
+
+    await PasswordResetRequest.updateOne(
+      { userId: user._id, status: 'PENDING' },
+      {
+        $set: {
+          email: user.email,
+          requestedAt: new Date(),
+          requestedByIp,
+          requestedUserAgent,
+          resolutionNote: null,
+          resolvedAt: null,
+          resolvedByAdminId: null,
+        },
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return res.status(200).json({ message: genericMessage });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const changePassword = async (req, res, next) => {
   try {
     const userId = req.userId;
@@ -223,4 +264,4 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
-export default { register, login, logout, forceLogoutOtherSession, changePassword };
+export default { register, login, logout, forceLogoutOtherSession, changePassword, requestPasswordReset };

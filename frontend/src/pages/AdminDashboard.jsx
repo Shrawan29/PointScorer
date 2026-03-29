@@ -46,6 +46,11 @@ const AdminDashboard = () => {
   const [blockingUserId, setBlockingUserId] = useState(null);
   const [editingFriendsLimit, setEditingFriendsLimit] = useState(null);
   const [editingFriendsValue, setEditingFriendsValue] = useState('');
+  const [resetRequests, setResetRequests] = useState([]);
+  const [resetRequestsLoading, setResetRequestsLoading] = useState(false);
+  const [resolvingResetId, setResolvingResetId] = useState(null);
+  const [tempPasswordByRequestId, setTempPasswordByRequestId] = useState({});
+  const [resetNoteByRequestId, setResetNoteByRequestId] = useState({});
 
   const [formData, setFormData] = useState({
     name: '',
@@ -68,6 +73,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (user?.isAdmin) {
       fetchUsers();
+      fetchResetRequests();
     }
   }, [user]);
 
@@ -81,6 +87,18 @@ const AdminDashboard = () => {
       setError(err.response?.data?.message || 'Failed to fetch users');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchResetRequests = async () => {
+    try {
+      setResetRequestsLoading(true);
+      const response = await axiosInstance.get('/api/admin/password-reset-requests?status=PENDING');
+      setResetRequests(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to fetch password reset requests');
+    } finally {
+      setResetRequestsLoading(false);
     }
   };
 
@@ -212,6 +230,40 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleSetTemporaryPassword = async (requestId) => {
+    const temporaryPassword = String(tempPasswordByRequestId[requestId] || '').trim();
+    const note = String(resetNoteByRequestId[requestId] || '').trim();
+
+    if (!temporaryPassword) {
+      setError('Temporary password is required');
+      return;
+    }
+
+    const passwordError = validatePassword(temporaryPassword);
+    if (passwordError) {
+      setError(passwordError);
+      return;
+    }
+
+    try {
+      setResolvingResetId(requestId);
+      setError('');
+      const response = await axiosInstance.post(`/api/admin/password-reset-requests/${requestId}/set-temporary-password`, {
+        temporaryPassword,
+        resolutionNote: note,
+      });
+      setSuccess(response?.data?.message || 'Temporary password set successfully');
+      setResetRequests((prev) => prev.filter((r) => String(r?._id) !== String(requestId)));
+      setTempPasswordByRequestId((prev) => ({ ...prev, [requestId]: '' }));
+      setResetNoteByRequestId((prev) => ({ ...prev, [requestId]: '' }));
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to set temporary password');
+    } finally {
+      setResolvingResetId(null);
+    }
+  };
+
   if (!user?.isAdmin) {
     return (
       <Layout>
@@ -323,6 +375,55 @@ const AdminDashboard = () => {
             </form>
           )}
         </Card>
+
+    <Card title="Password Reset Requests (Pending)">
+      {resetRequestsLoading ? (
+        <div className="text-center py-6 text-slate-600">Loading reset requests...</div>
+      ) : resetRequests.length === 0 ? (
+        <div className="text-center py-6 text-slate-600">No pending reset requests.</div>
+      ) : (
+        <div className="grid gap-3">
+          {resetRequests.map((r) => {
+            const rid = String(r?._id || '');
+            const userName = r?.userId?.name || 'Unknown user';
+            const userEmail = r?.email || r?.userId?.email || 'N/A';
+            return (
+              <div key={rid} className="border border-slate-200 rounded-lg p-3 grid gap-2">
+                <div>
+                  <div className="font-semibold text-slate-900">{userName}</div>
+                  <div className="text-sm text-slate-600">{userEmail}</div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Requested: {r?.requestedAt ? new Date(r.requestedAt).toLocaleString() : '—'}
+                  </div>
+                </div>
+
+                <FormField
+                  label="Temporary password"
+                  type="password"
+                  value={tempPasswordByRequestId[rid] || ''}
+                  onChange={(v) => setTempPasswordByRequestId((prev) => ({ ...prev, [rid]: v }))}
+                  placeholder="At least 8 chars with uppercase, lowercase, number"
+                />
+
+                <FormField
+                  label="Admin note (optional)"
+                  value={resetNoteByRequestId[rid] || ''}
+                  onChange={(v) => setResetNoteByRequestId((prev) => ({ ...prev, [rid]: v }))}
+                  placeholder="Temporary password shared via secure channel"
+                />
+
+                <Button
+                  onClick={() => handleSetTemporaryPassword(rid)}
+                  disabled={resolvingResetId === rid}
+                >
+                  {resolvingResetId === rid ? 'Updating...' : 'Set temporary password'}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
 
         {/* Users List */}
         <Card title="All Users">

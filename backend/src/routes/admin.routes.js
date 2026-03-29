@@ -6,6 +6,8 @@ import {
   updateUser,
   toggleUserBlock,
   deleteUser,
+	getPasswordResetRequests,
+	setTemporaryPasswordForResetRequest,
 } from '../controllers/admin.controller.js';
 import authMiddleware from '../middlewares/auth.middleware.js';
 import User from '../models/User.model.js';
@@ -44,5 +46,7 @@ router.get('/users/:userId', getUserById);
 router.put('/users/:userId', updateUser);
 router.patch('/users/:userId/toggle-block', toggleUserBlock);
 router.delete('/users/:userId', deleteUser);
+router.get('/password-reset-requests', getPasswordResetRequests);
+router.post('/password-reset-requests/:requestId/set-temporary-password', setTemporaryPasswordForResetRequest);
 
 export default router;

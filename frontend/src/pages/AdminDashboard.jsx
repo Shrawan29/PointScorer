@@ -492,14 +492,15 @@ const AdminDashboard = () => {
                       ) : (
                         <div className="text-center px-2 py-1 bg-slate-100 rounded text-xs">
                           <div className="text-slate-600">Friends</div>
+                          <div className="font-semibold text-slate-900">{u.maxFriendsAllowed}</div>
                           <button
                             onClick={() => {
                               setEditingFriendsLimit(u._id);
                               setEditingFriendsValue(u.maxFriendsAllowed);
                             }}
-                            className="font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                            className="mt-1 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium"
                           >
-                            {u.maxFriendsAllowed}
+                            Edit limit
                           </button>
                         </div>
                       )}

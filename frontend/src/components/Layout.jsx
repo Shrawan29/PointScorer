@@ -23,6 +23,12 @@ export const Layout = ({ children }) => {
               <div className="text-xs text-slate-500 hidden sm:block max-w-[140px] truncate">
                 {user?.email || ''}
               </div>
+              <Link
+                to="/change-password"
+                className="px-3 py-1.5 rounded-md text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200"
+              >
+                Change Password
+              </Link>
               <button
                 type="button"
                 onClick={logout}

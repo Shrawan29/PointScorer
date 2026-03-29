@@ -22,6 +22,7 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 import FriendPublicHomePage from './pages/FriendPublicHomePage.jsx';
 import FriendPublicResultPage from './pages/FriendPublicResultPage.jsx';
 import FriendPublicBreakdownPage from './pages/FriendPublicBreakdownPage.jsx';
+import ChangePasswordPage from './pages/ChangePasswordPage.jsx';
 
 const RootRedirect = () => {
 	const token = localStorage.getItem('token');
@@ -40,6 +41,7 @@ export const App = () => {
 
 			<Route element={<ProtectedRoute />}>
 				<Route path="/dashboard" element={<DashboardPage />} />
+				<Route path="/change-password" element={<ChangePasswordPage />} />
 				<Route path="/admin" element={<AdminDashboard />} />
 				<Route path="/matches/:matchId" element={<MatchDetails />} />
 				<Route path="/select-friend/:matchId" element={<SelectFriend />} />

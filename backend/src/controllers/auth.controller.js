@@ -183,4 +183,44 @@ export const forceLogoutOtherSession = async (req, res, next) => {
 	}
 };
 
-export default { register, login, logout, forceLogoutOtherSession };
+export const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.userId;
+    const { currentPassword, newPassword } = req.body || {};
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+    if (String(newPassword).length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const isCurrentValid = await bcrypt.compare(String(currentPassword), String(user.password));
+    if (!isCurrentValid) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    const isSamePassword = await bcrypt.compare(String(newPassword), String(user.password));
+    if (isSamePassword) {
+      return res.status(400).json({ message: 'New password must be different from current password' });
+    }
+
+    const hashedPassword = await bcrypt.hash(String(newPassword), 10);
+    user.password = hashedPassword;
+    await user.save();
+
+    return res.status(200).json({ message: 'Password changed successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export default { register, login, logout, forceLogoutOtherSession, changePassword };

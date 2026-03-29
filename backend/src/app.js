@@ -88,6 +88,17 @@ try {
   } else {
     // eslint-disable-next-line no-console
     console.warn('[App] Frontend dist folder not found at:', possiblePaths.join(', '));
+
+  const configuredFrontendBase =
+    typeof process.env.FRONTEND_BASE_URL === 'string'
+      ? process.env.FRONTEND_BASE_URL.trim().replace(/\/$/, '')
+      : '';
+
+  if (configuredFrontendBase) {
+    app.get(/^\/friend-view\/.*/, (req, res) => {
+      return res.redirect(302, `${configuredFrontendBase}${req.path}`);
+    });
+  }
   }
 } catch (err) {
   // eslint-disable-next-line no-console

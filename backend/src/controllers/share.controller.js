@@ -136,13 +136,28 @@ export const getFriendViewerLink = async (req, res, next) => {
 			.split(',')[0]
 			.trim();
 
+		const originHeader = String(req.headers.origin || '').trim();
+		const originBase = /^https?:\/\//i.test(originHeader)
+			? originHeader.replace(/\/$/, '')
+			: '';
+
+		const refererHeader = String(req.headers.referer || '').trim();
+		let refererBase = '';
+		if (refererHeader) {
+			try {
+				refererBase = new URL(refererHeader).origin;
+			} catch (_err) {
+				refererBase = '';
+			}
+		}
+
 		const configuredFrontendBase =
 			typeof process.env.FRONTEND_BASE_URL === 'string'
 				? process.env.FRONTEND_BASE_URL.trim().replace(/\/$/, '')
 				: '';
 
 		const inferredBase = host ? `${proto}://${host}` : '';
-		const baseUrl = configuredFrontendBase || inferredBase;
+		const baseUrl = configuredFrontendBase || originBase || refererBase || inferredBase;
 		const path = `/friend-view/${friend.friendViewToken}`;
 
 		return res.status(200).json({

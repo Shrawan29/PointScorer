@@ -195,12 +195,6 @@ export const ResultPage = () => {
             <Link to={`/sessions/${sessionId}/breakdown`} className="flex-1 sm:flex-none">
               <Button variant="secondary" fullWidth>Breakdown</Button>
             </Link>
-            <Link to={`/sessions/${sessionId}/share`} className="flex-1 sm:flex-none">
-              <Button variant="secondary" fullWidth>Share</Button>
-            </Link>
-            <Link to={`/sessions/${sessionId}/selection`} className="flex-1 sm:flex-none">
-              <Button variant="secondary" fullWidth>Selection</Button>
-            </Link>
           </div>
         }
       />

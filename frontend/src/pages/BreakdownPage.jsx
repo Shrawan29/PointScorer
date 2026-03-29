@@ -227,9 +227,6 @@ export const BreakdownPage = () => {
 						<Link to={`/sessions/${sessionId}/result`}>
 							<Button variant="secondary">Result</Button>
 						</Link>
-						<Link to={`/sessions/${sessionId}/selection`}>
-							<Button variant="secondary">Selection</Button>
-						</Link>
 						<Button onClick={onCopyWhatsAppBreakdown} disabled={copying}>
 							{copying ? 'Copying…' : 'Copy WhatsApp breakdown'}
 						</Button>

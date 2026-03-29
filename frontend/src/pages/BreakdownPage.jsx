@@ -29,6 +29,7 @@ export const BreakdownPage = () => {
 	const [info, setInfo] = useState('');
 	const [loading, setLoading] = useState(false);
 	const [copying, setCopying] = useState(false);
+	const [shareText, setShareText] = useState('');
 	const [expanded, setExpanded] = useState(() => new Set());
 
 	const matchName = useMemo(
@@ -57,14 +58,31 @@ export const BreakdownPage = () => {
 		[data]
 	);
 
+	const winnerSummary = useMemo(() => {
+		const diff = Math.abs(totals.user - totals.friend);
+
+		if (totals.user === totals.friend) {
+			return 'Match tied';
+		}
+
+		const winner = totals.user > totals.friend ? userDisplayName : friendDisplayName;
+		return `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`;
+	}, [totals.user, totals.friend, userDisplayName, friendDisplayName]);
+
 	useEffect(() => {
 		const run = async () => {
 			setError('');
 			setInfo('');
 			setLoading(true);
 			try {
-				const res = await axiosInstance.get(`/api/scoring/session/${sessionId}/breakdown?t=${Date.now()}`);
-				setData(res.data);
+				const [breakdownRes, shareRes] = await Promise.all([
+					axiosInstance.get(`/api/scoring/session/${sessionId}/breakdown?t=${Date.now()}`),
+					axiosInstance
+						.get(`/api/share/whatsapp-breakdown/${sessionId}`)
+						.catch(() => ({ data: { text: '' } })),
+				]);
+				setData(breakdownRes.data);
+				setShareText(shareRes?.data?.text || '');
 			} catch (err) {
 				setError(err?.response?.data?.message || 'Failed to load breakdown');
 			} finally {
@@ -90,14 +108,30 @@ export const BreakdownPage = () => {
 		setInfo('');
 		setCopying(true);
 		try {
-			const res = await axiosInstance.get(`/api/share/whatsapp-breakdown/${sessionId}`);
-			const text = res.data?.text || '';
+			let text = shareText;
+			if (!text) {
+				const res = await axiosInstance.get(`/api/share/whatsapp-breakdown/${sessionId}`);
+				text = res.data?.text || '';
+				setShareText(text);
+			}
 			if (!text) {
 				setError('No share text available');
 				return;
 			}
-			await copyToClipboard(text);
-			setInfo('Copied WhatsApp breakdown text');
+
+			const copied = await copyToClipboard(text);
+			if (copied) {
+				setInfo('Copied WhatsApp breakdown text');
+				return;
+			}
+
+			if (navigator?.share) {
+				await navigator.share({ text });
+				setInfo('Opened share sheet. Choose WhatsApp to share.');
+				return;
+			}
+
+			setError('Copy failed on this device. Please try long-press copy from share text.');
 		} catch (err) {
 			setError(err?.response?.data?.message || 'Failed to copy share text');
 		} finally {
@@ -211,7 +245,7 @@ export const BreakdownPage = () => {
 					<Card title="Summary">
 						<div className="text-sm text-slate-700">{userDisplayName} points: {totals.user}</div>
 						<div className="text-sm text-slate-700">{friendDisplayName} points: {totals.friend}</div>
-						<div className="text-sm text-slate-700 mt-1">Total points: {totals.total}</div>
+						<div className="text-sm text-slate-700 mt-1">Result: {winnerSummary}</div>
 
 						<div className="text-sm text-slate-600 mt-2">
 							Generated: {data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : '—'}

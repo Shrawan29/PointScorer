@@ -9,6 +9,8 @@ import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
+const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
 export const ResultPage = () => {
   const { sessionId } = useParams();
   const { user } = useAuth();
@@ -46,6 +48,19 @@ export const ResultPage = () => {
     () => data?.friendName || data?.friend?.friendName || 'Friend',
     [data]
   );
+
+  const winnerSummary = useMemo(() => {
+    const userPoints = toNumber(data?.userTotalPoints);
+    const friendPoints = toNumber(data?.friendTotalPoints);
+    const diff = Math.abs(userPoints - friendPoints);
+
+    if (userPoints === friendPoints) {
+      return 'Match tied';
+    }
+
+    const winner = userPoints > friendPoints ? userDisplayName : friendDisplayName;
+    return `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`;
+  }, [data, userDisplayName, friendDisplayName]);
 
 	const canRefresh = useMemo(
 		() => Boolean(data?.selectionFrozen) && data?.matchState !== 'UPCOMING',
@@ -176,7 +191,7 @@ export const ResultPage = () => {
           <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} captain: {friendCaptain || 'N/A'}</div>
           <div className="text-xs sm:text-sm text-slate-700 mt-1">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
           <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
-      <div className="text-xs sm:text-sm text-slate-700 mt-1">Total points: {data.totalPoints ?? 0}</div>
+          <div className="text-xs sm:text-sm text-slate-700 mt-1">Result: {winnerSummary}</div>
 
       <div className="text-xs sm:text-sm mt-2">
         <span className="text-slate-700">Last refreshed: </span>

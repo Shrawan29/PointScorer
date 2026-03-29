@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import crypto from 'crypto';
 
 import Friend from '../models/Friend.model.js';
 import MatchSession from '../models/MatchSession.model.js';
@@ -110,7 +111,54 @@ export const getWhatsAppBreakdownShareText = async (req, res, next) => {
 	}
 };
 
+export const getFriendViewerLink = async (req, res, next) => {
+	try {
+		const { friendId } = req.params;
+
+		if (!mongoose.Types.ObjectId.isValid(friendId)) {
+			return res.status(400).json({ message: 'Invalid friendId' });
+		}
+
+		const friend = await Friend.findOne({ _id: friendId, userId: req.userId });
+		if (!friend) {
+			return res.status(404).json({ message: 'Friend not found' });
+		}
+
+		if (!friend.friendViewToken) {
+			friend.friendViewToken = crypto.randomBytes(24).toString('hex');
+			await friend.save();
+		}
+
+		const proto = String(req.headers['x-forwarded-proto'] || req.protocol || 'https')
+			.split(',')[0]
+			.trim();
+		const host = String(req.headers['x-forwarded-host'] || req.get('host') || '')
+			.split(',')[0]
+			.trim();
+
+		const configuredFrontendBase =
+			typeof process.env.FRONTEND_BASE_URL === 'string'
+				? process.env.FRONTEND_BASE_URL.trim().replace(/\/$/, '')
+				: '';
+
+		const inferredBase = host ? `${proto}://${host}` : '';
+		const baseUrl = configuredFrontendBase || inferredBase;
+		const path = `/friend-view/${friend.friendViewToken}`;
+
+		return res.status(200).json({
+			friendId: String(friend._id),
+			friendName: friend.friendName,
+			token: friend.friendViewToken,
+			path,
+			url: baseUrl ? `${baseUrl}${path}` : path,
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
 export default {
 	getWhatsAppShareText,
 	getWhatsAppBreakdownShareText,
+	getFriendViewerLink,
 };

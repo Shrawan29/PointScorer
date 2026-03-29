@@ -14,6 +14,7 @@ import historyRoutes from './routes/history.routes.js';
 import shareRoutes from './routes/share.routes.js';
 import cricketRoutes from './routes/cricket.routes.js';
 import scoringRoutes from './routes/scoring.routes.js';
+import publicRoutes from './routes/public.routes.js';
 import errorMiddleware from './middlewares/error.middleware.js';
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/cricket', cricketRoutes);
 app.use('/api/scoring', scoringRoutes);
+app.use('/api/public', publicRoutes);
 
 // Serve frontend build (single-server deploy) + SPA fallback
 try {

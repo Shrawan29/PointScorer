@@ -12,6 +12,12 @@ const friendSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    friendViewToken: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
   },
   { timestamps: true }
 );

@@ -7,6 +7,7 @@ import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
+import { copyToClipboard } from '../utils/copyToClipboard.js';
 
 export const FriendDetailPage = () => {
   const { friendId } = useParams();
@@ -17,8 +18,10 @@ export const FriendDetailPage = () => {
   const [sessions, setSessions] = useState([]);
   const [showPending, setShowPending] = useState(false);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
 	const [deletingId, setDeletingId] = useState('');
+	const [copyingLink, setCopyingLink] = useState(false);
 
   const friendName = useMemo(() => friend?.friendName || friendId, [friend, friendId]);
 
@@ -69,6 +72,32 @@ export const FriendDetailPage = () => {
     }
   };
 
+  const onCopyFriendViewLink = async () => {
+    setError('');
+    setInfo('');
+    setCopyingLink(true);
+    try {
+      const res = await axiosInstance.get(`/api/share/friend-view/${friendId}`);
+      const url = res?.data?.url || '';
+      if (!url) {
+        setError('Unable to generate friend view link');
+        return;
+      }
+
+      const copied = await copyToClipboard(url);
+      if (!copied) {
+        setError('Copy failed for friend view link');
+        return;
+      }
+
+      setInfo('Friend view link copied');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to generate friend view link');
+    } finally {
+      setCopyingLink(false);
+    }
+  };
+
   return (
     <Layout>
       <PageHeader
@@ -76,6 +105,9 @@ export const FriendDetailPage = () => {
         subtitle="Rulesets and match sessions for this friend."
         actions={
           <div className="flex gap-2">
+            <Button variant="secondary" onClick={onCopyFriendViewLink} disabled={copyingLink}>
+              {copyingLink ? 'Copying...' : 'Copy friend result link'}
+            </Button>
             <Link to={`/friends/${friendId}/rulesets`}>
               <Button variant="secondary">Rulesets</Button>
             </Link>
@@ -84,6 +116,7 @@ export const FriendDetailPage = () => {
       />
 
       {error && <Alert type="error">{error}</Alert>}
+			{info && <Alert type="success">{info}</Alert>}
 
       {loading ? (
         <div className="text-sm text-slate-600">Loading...</div>

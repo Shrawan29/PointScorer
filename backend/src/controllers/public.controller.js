@@ -7,6 +7,7 @@ import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import User from '../models/User.model.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
 import { buildDetailedBreakdownForSessionId } from '../services/breakdown.service.js';
+import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh.service.js';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -184,8 +185,34 @@ export const getFriendPublicMatchBreakdown = async (req, res, next) => {
 	}
 };
 
+export const refreshFriendPublicSession = async (req, res, next) => {
+	try {
+		const { token, sessionId } = req.params;
+		const friend = await resolveFriendFromToken(token);
+		if (!friend) {
+			return res.status(404).json({ message: 'Invalid or expired friend link' });
+		}
+
+		const session = await findSessionForFriend({ friendId: friend._id, sessionId });
+		if (!session) {
+			return res.status(404).json({ message: 'MatchSession not found' });
+		}
+
+		const out = await refreshStatsAndRecalculateForSessionId({
+			sessionId,
+			userId: session.userId,
+			force: true,
+		});
+
+		return res.status(200).json(out);
+	} catch (error) {
+		next(error);
+	}
+};
+
 export default {
 	getFriendPublicView,
 	getFriendPublicMatchResult,
 	getFriendPublicMatchBreakdown,
+	refreshFriendPublicSession,
 };

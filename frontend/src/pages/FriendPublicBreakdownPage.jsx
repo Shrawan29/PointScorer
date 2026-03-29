@@ -21,7 +21,14 @@ export const FriendPublicBreakdownPage = () => {
 
 	const [data, setData] = useState(null);
 	const [error, setError] = useState('');
+	const [info, setInfo] = useState('');
 	const [loading, setLoading] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
+
+	const loadBreakdown = async () => {
+		const res = await axiosInstance.get(`/api/public/friends/${token}/sessions/${sessionId}/breakdown`);
+		setData(res.data);
+	};
 
 	const userPlayers = useMemo(() => (Array.isArray(data?.teams?.USER) ? data.teams.USER : []), [data]);
 	const friendPlayers = useMemo(() => (Array.isArray(data?.teams?.FRIEND) ? data.teams.FRIEND : []), [data]);
@@ -51,10 +58,10 @@ export const FriendPublicBreakdownPage = () => {
 	useEffect(() => {
 		const run = async () => {
 			setError('');
+			setInfo('');
 			setLoading(true);
 			try {
-				const res = await axiosInstance.get(`/api/public/friends/${token}/sessions/${sessionId}/breakdown`);
-				setData(res.data);
+				await loadBreakdown();
 			} catch (err) {
 				setError(err?.response?.data?.message || 'Failed to load breakdown');
 			} finally {
@@ -64,6 +71,21 @@ export const FriendPublicBreakdownPage = () => {
 
 		run();
 	}, [token, sessionId]);
+
+	const onRefreshRecalculate = async () => {
+		setError('');
+		setInfo('');
+		setRefreshing(true);
+		try {
+			await axiosInstance.post(`/api/public/friends/${token}/sessions/${sessionId}/refresh`);
+			await loadBreakdown();
+			setInfo('Stats refreshed and points recalculated');
+		} catch (err) {
+			setError(err?.response?.data?.message || 'Failed to refresh stats');
+		} finally {
+			setRefreshing(false);
+		}
+	};
 
 	return (
 		<div className="min-h-screen bg-slate-50">
@@ -84,6 +106,7 @@ export const FriendPublicBreakdownPage = () => {
 				</div>
 
 				{error && <Alert type="error">{error}</Alert>}
+				{info && <Alert type="success">{info}</Alert>}
 
 				{loading ? (
 					<div className="text-sm text-slate-600">Loading...</div>
@@ -93,6 +116,11 @@ export const FriendPublicBreakdownPage = () => {
 							<div className="text-sm text-slate-700">Owner points: {totals.user}</div>
 							<div className="text-sm text-slate-700">{data?.friend?.friendName || 'Friend'} points: {totals.friend}</div>
 							<div className="text-sm text-slate-700 mt-1">Result: {winnerSummary}</div>
+							<div className="mt-3">
+								<Button onClick={onRefreshRecalculate} disabled={refreshing} fullWidth>
+									{refreshing ? 'Refreshing...' : 'Refresh stats & recalc'}
+								</Button>
+							</div>
 						</Card>
 
 						<Card title="Owner Team Breakdown">

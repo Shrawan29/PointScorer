@@ -235,6 +235,21 @@ export const refreshStatsAndRecalculateForSessionId = async ({ sessionId, userId
 	const refreshed = await refreshRawStatsFromCricbuzzForSession({ session, selection });
 	const recalced = await recalculatePointsForSession({ session, selection, ruleSet });
 
+	const scorecardState = String(refreshed?.scorecardState || '').toUpperCase();
+	const scorecardStatus = String(refreshed?.scorecardStatus || '').toLowerCase();
+	const isCompletedFromScorecard =
+		scorecardState === 'COMPLETED' ||
+		scorecardStatus.includes(' won ') ||
+		scorecardStatus.includes(' won by') ||
+		scorecardStatus.includes('beat') ||
+		scorecardStatus.includes('match tied') ||
+		scorecardStatus.includes('match drawn') ||
+		scorecardStatus.includes('result');
+
+	if (isCompletedFromScorecard && session.status !== 'COMPLETED') {
+		await MatchSession.updateOne({ _id: session._id }, { $set: { status: 'COMPLETED' } });
+	}
+
 	return {
 		message: 'Stats refreshed and points recalculated',
 		statsUpdated: refreshed.updatedCount,
@@ -244,6 +259,7 @@ export const refreshStatsAndRecalculateForSessionId = async ({ sessionId, userId
 		nonZeroCount: Array.isArray(refreshed.nonZeroPlayers) ? refreshed.nonZeroPlayers.length : 0,
 		scorecardState: refreshed.scorecardState,
 		scorecardStatus: refreshed.scorecardStatus,
+		matchStatus: isCompletedFromScorecard ? 'COMPLETED' : session.status,
 		...recalced,
 	};
 };

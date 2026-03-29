@@ -11,6 +11,20 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
+const isCompletedByScorecard = (meta) => {
+  const state = String(meta?.scorecardState || '').toUpperCase();
+  const status = String(meta?.scorecardStatus || '').toLowerCase();
+  return (
+    state === 'COMPLETED' ||
+    status.includes(' won ') ||
+    status.includes(' won by') ||
+    status.includes('beat') ||
+    status.includes('match tied') ||
+    status.includes('match drawn') ||
+    status.includes('result')
+  );
+};
+
 export const ResultPage = () => {
   const { sessionId } = useParams();
   const { user } = useAuth();
@@ -53,7 +67,10 @@ export const ResultPage = () => {
     const userPoints = toNumber(data?.userTotalPoints);
     const friendPoints = toNumber(data?.friendTotalPoints);
     const diff = Math.abs(userPoints - friendPoints);
-    const isCompleted = data?.match?.status === 'COMPLETED' || data?.matchState === 'COMPLETED';
+    const isCompleted =
+      data?.match?.status === 'COMPLETED' ||
+      data?.matchState === 'COMPLETED' ||
+      isCompletedByScorecard(refreshMeta);
 
     if (userPoints === friendPoints) {
       return isCompleted ? 'Match tied' : 'Scores level';
@@ -63,7 +80,7 @@ export const ResultPage = () => {
     return isCompleted
       ? `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`
       : `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`;
-  }, [data, userDisplayName, friendDisplayName]);
+  }, [data, userDisplayName, friendDisplayName, refreshMeta]);
 
 	const canRefresh = useMemo(
 		() => Boolean(data?.selectionFrozen) && data?.matchState !== 'UPCOMING',
@@ -140,6 +157,11 @@ export const ResultPage = () => {
                 userTotalPoints: resp.data.userTotalPoints,
                 friendTotalPoints: resp.data.friendTotalPoints,
                 totalPoints: resp.data.totalPoints,
+                matchState: resp?.data?.matchStatus === 'COMPLETED' ? 'COMPLETED' : prev?.matchState,
+                match:
+                  resp?.data?.matchStatus === 'COMPLETED'
+                    ? { ...(prev?.match || {}), status: 'COMPLETED' }
+                    : prev?.match,
               }
             : prev
         );

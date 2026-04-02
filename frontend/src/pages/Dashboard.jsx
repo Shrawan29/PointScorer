@@ -12,6 +12,7 @@ const TYPE_ALL = 'ALL';
 const TYPE_T20 = 'T20';
 const TYPE_ODI = 'ODI';
 const TYPE_TEST = 'TEST';
+const TYPE_IPL = 'IPL';
 
 const normalizeType = (value) => {
 	if (!value) return null;
@@ -47,6 +48,11 @@ const teamsTextForSearch = (teams) => {
 	return '';
 };
 
+const isIplMatch = (match) => {
+	const text = `${match?.league || ''} ${match?.seriesName || ''} ${match?.matchName || ''} ${match?.rawText || ''}`.toLowerCase();
+	return /indian premier league|\bipl\b/.test(text) && !/women|women's|womens|\bwpl\b/.test(text);
+};
+
 const extractMatchId = (value) => {
 	if (!value) return null;
 	if (typeof value === 'number') return String(value);
@@ -72,6 +78,8 @@ const normalizeMatch = (match, forcedStatus) => {
 		matchName,
 		teams,
 		matchType: normalizedType,
+		league: match?.league ?? null,
+		seriesName: match?.seriesName ?? null,
 		matchStatus,
 		startTime: match?.startTime ?? match?.startTimeText ?? null,
 		matchUrl,
@@ -96,8 +104,11 @@ export const DashboardMatches = () => {
 		dataRef.current = data;
 	}, [data]);
 
-	const fetchMatchesFromApi = async ({ bypassBackendCache = false } = {}) => {
-		const todayUrl = bypassBackendCache ? '/api/cricket/matches?nocache=1' : '/api/cricket/matches';
+	const fetchMatchesFromApi = async ({ bypassBackendCache = false, includeIplSeason = false } = {}) => {
+		const todayParams = [];
+		if (bypassBackendCache) todayParams.push('nocache=1');
+		if (includeIplSeason) todayParams.push('includeIplSeason=1');
+		const todayUrl = `/api/cricket/matches${todayParams.length ? `?${todayParams.join('&')}` : ''}`;
 		const upcomingUrl = bypassBackendCache ? '/api/cricket/matches/upcoming?nocache=1' : '/api/cricket/matches/upcoming';
 
 		let todayArray = [];
@@ -130,7 +141,9 @@ export const DashboardMatches = () => {
 		return { nextData: { todayMatches, upcomingMatches }, errors };
 	};
 
-	const loadMatches = async (useCache = true) => {
+	const loadMatches = async (useCache = true, options = {}) => {
+		const includeIplSeason = Boolean(options?.includeIplSeason);
+		const cacheKey = includeIplSeason ? 'cricketMatchesCacheV3_ipl' : 'cricketMatchesCacheV3';
 		const reqId = (requestSeqRef.current += 1);
 
 		// Manual refresh should show loading; background refresh shouldn't.
@@ -141,7 +154,7 @@ export const DashboardMatches = () => {
 		try {
 			// Try cache first - extended to 2 hours for slower API
 			if (useCache) {
-				const cachedRaw = sessionStorage.getItem('cricketMatchesCacheV3');
+				const cachedRaw = sessionStorage.getItem(cacheKey);
 				if (cachedRaw) {
 					try {
 						const cached = JSON.parse(cachedRaw);
@@ -161,11 +174,11 @@ export const DashboardMatches = () => {
 								if (hasMissingType) {
 									void (async () => {
 										try {
-											const res = await fetchMatchesFromApi({ bypassBackendCache: false });
+											const res = await fetchMatchesFromApi({ bypassBackendCache: false, includeIplSeason });
 											if (requestSeqRef.current !== reqId) return;
 											setData(res.nextData);
 											try {
-												sessionStorage.setItem('cricketMatchesCacheV3', JSON.stringify({ ts: Date.now(), data: res.nextData }));
+												sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: res.nextData }));
 											} catch {
 												// ignore
 											}
@@ -184,17 +197,17 @@ export const DashboardMatches = () => {
 			} else {
 				// Clear cache if forcing refresh
 				try {
-					sessionStorage.removeItem('cricketMatchesCacheV3');
+					sessionStorage.removeItem(cacheKey);
 				} catch {
 					// ignore
 				}
 			}
 
-			const { nextData, errors } = await fetchMatchesFromApi({ bypassBackendCache: !useCache });
+			const { nextData, errors } = await fetchMatchesFromApi({ bypassBackendCache: !useCache, includeIplSeason });
 			if (requestSeqRef.current !== reqId) return;
 			setData(nextData);
 			try {
-				sessionStorage.setItem('cricketMatchesCacheV3', JSON.stringify({ ts: Date.now(), data: nextData }));
+				sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: nextData }));
 			} catch {
 				// ignore
 			}
@@ -209,7 +222,7 @@ export const DashboardMatches = () => {
 	};
 
 	useEffect(() => {
-		loadMatches(true);
+		loadMatches(true, { includeIplSeason: matchType === TYPE_IPL });
 	}, []);
 
 	// Auto-refresh in the background while formats are still missing.
@@ -219,11 +232,11 @@ export const DashboardMatches = () => {
 			const all = [...(current?.todayMatches || []), ...(current?.upcomingMatches || [])];
 			const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
 			if (hasMissingType) {
-				void loadMatches(true);
+				void loadMatches(true, { includeIplSeason: matchType === TYPE_IPL });
 			}
 		}, 15000);
 		return () => clearInterval(t);
-	}, []);
+	}, [matchType]);
 
 	useEffect(() => {
 		setSearchInput(search);
@@ -242,7 +255,9 @@ export const DashboardMatches = () => {
 	const filteredTodayMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return todayMatches.filter((m) => {
-			const typeOk = matchType === TYPE_ALL || String(m?.matchType || '').toUpperCase() === matchType;
+			const typeOk =
+				matchType === TYPE_ALL ||
+				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
 			if (!typeOk) return false;
 
 			if (!q) return true;
@@ -254,7 +269,9 @@ export const DashboardMatches = () => {
 	const filteredUpcomingMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return upcomingMatches.filter((m) => {
-			const typeOk = matchType === TYPE_ALL || String(m?.matchType || '').toUpperCase() === matchType;
+			const typeOk =
+				matchType === TYPE_ALL ||
+				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
 			if (!typeOk) return false;
 
 			if (!q) return true;
@@ -265,12 +282,12 @@ export const DashboardMatches = () => {
 
 	const handleMatchTypeChange = (nextType) => {
 		setMatchType(nextType);
-		void loadMatches(false);
+		void loadMatches(false, { includeIplSeason: nextType === TYPE_IPL });
 	};
 
 	const applySearchFilter = () => {
 		setSearch(searchInput);
-		void loadMatches(false);
+		void loadMatches(false, { includeIplSeason: matchType === TYPE_IPL });
 	};
 
 	return (
@@ -304,7 +321,7 @@ export const DashboardMatches = () => {
 						</button>
 						<button
 							type="button"
-							onClick={() => loadMatches(false)}
+							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL })}
 							disabled={loading}
 							className="px-3 py-2 rounded-md text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
 							title="Clear cache and refresh"
@@ -362,6 +379,17 @@ export const DashboardMatches = () => {
 									}`}
 								>
 									Test
+								</button>
+								<button
+									type="button"
+									onClick={() => handleMatchTypeChange(TYPE_IPL)}
+									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+										matchType === TYPE_IPL
+											? 'bg-slate-900 text-white border-slate-900'
+											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+									}`}
+								>
+									IPL
 								</button>
 							</div>
 						</div>

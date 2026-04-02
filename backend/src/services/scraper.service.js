@@ -9,6 +9,8 @@ const MATCH_LIST_CACHE_TTL_MS = Number(process.env.MATCH_LIST_CACHE_TTL_MS || 60
 const MATCH_FORMAT_CACHE_TTL_MS = Number(process.env.MATCH_FORMAT_CACHE_TTL_MS || 6 * 60 * 60_000);
 const SQUADS_CACHE_TTL_MS = Number(process.env.SQUADS_CACHE_TTL_MS || 5 * 60_000);
 const SCORECARD_STATS_CACHE_TTL_MS = Number(process.env.SCORECARD_STATS_CACHE_TTL_MS || 60_000);
+const LIVE_TODAY_RECENT_RETENTION_MS = Number(process.env.LIVE_TODAY_RECENT_RETENTION_MS || 36 * 60 * 60_000);
+const IPL_RECENT_EDITION_CACHE_TTL_MS = Number(process.env.IPL_RECENT_EDITION_CACHE_TTL_MS || 10 * 60_000);
 
 // MANDATORY HEADERS (must be set exactly as requested)
 const CRICBUZZ_HEADERS = {
@@ -31,6 +33,8 @@ const matchListCache = {
 const squadsCache = new Map();
 const scorecardStatsCache = new Map();
 const matchFormatCache = new Map();
+const recentLiveTodayMatches = new Map();
+const iplRecentEditionCache = { ts: 0, data: [] };
 
 /**
  * Safely fetch HTML page with debug logging
@@ -92,6 +96,87 @@ const extractMatchIdFromUrl = (value) => {
 	const s = String(value);
 	const m = s.match(/\/live-cricket-scores\/(\d+)\//i) || s.match(/\/cricket-scores\/(\d+)\//i);
 	return m?.[1] || null;
+};
+
+const getLiveTodayMatchKey = (match) => {
+	const matchId = String(match?.matchId || extractMatchIdFromUrl(match?.matchUrl) || '').trim();
+	if (matchId) return `id:${matchId}`;
+
+	const url = normalizeWhitespace(match?.matchUrl);
+	if (url) return `url:${url}`;
+
+	const name = normalizeWhitespace(match?.matchName);
+	const team1 = normalizeWhitespace(match?.team1);
+	const team2 = normalizeWhitespace(match?.team2);
+	if (name || team1 || team2) return `name:${name}|${team1}|${team2}`;
+
+	return null;
+};
+
+const mergeLiveTodayMatch = (prev = {}, next = {}) => ({
+	...prev,
+	...next,
+	matchType: next?.matchType || prev?.matchType || null,
+	rawText: next?.rawText || prev?.rawText || null,
+});
+
+const rememberLiveTodayMatches = (matches, now = Date.now()) => {
+	for (const match of Array.isArray(matches) ? matches : []) {
+		const key = getLiveTodayMatchKey(match);
+		if (!key) continue;
+
+		const prev = recentLiveTodayMatches.get(key);
+		recentLiveTodayMatches.set(key, {
+			match: mergeLiveTodayMatch(prev?.match, match),
+			lastSeenAt: now,
+		});
+	}
+};
+
+const collectRetainedLiveTodayMatches = (currentMatches, now = Date.now()) => {
+	const currentKeys = new Set();
+	for (const match of Array.isArray(currentMatches) ? currentMatches : []) {
+		const key = getLiveTodayMatchKey(match);
+		if (key) currentKeys.add(key);
+	}
+
+	const retained = [];
+	for (const [key, entry] of recentLiveTodayMatches.entries()) {
+		if (!entry?.match || !entry?.lastSeenAt) {
+			recentLiveTodayMatches.delete(key);
+			continue;
+		}
+
+		if (now - Number(entry.lastSeenAt) > LIVE_TODAY_RECENT_RETENTION_MS) {
+			recentLiveTodayMatches.delete(key);
+			continue;
+		}
+
+		if (currentKeys.has(key)) continue;
+
+		retained.push({
+			...entry.match,
+			// Retained entries are no longer live on source page.
+			matchStatus: entry.match?.matchStatus === 'LIVE' ? 'TODAY' : entry.match?.matchStatus || 'TODAY',
+			isRetainedRecent: true,
+		});
+	}
+
+	return retained;
+};
+
+const dedupeMatchesByKey = (matches) => {
+	const out = [];
+	const seen = new Set();
+
+	for (const match of Array.isArray(matches) ? matches : []) {
+		const key = getLiveTodayMatchKey(match) || `anon:${normalizeWhitespace(match?.matchName)}|${normalizeWhitespace(match?.rawText)}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(match);
+	}
+
+	return out;
 };
 
 const uniqueStrings = (arr) => {
@@ -861,6 +946,199 @@ const parseTeams = (matchString) => {
 	return { team1: null, team2: null };
 };
 
+const IPL_NAME_RE = /indian\s+premier\s+league|indian-premier-league|\bipl\b/i;
+const IPL_EXCLUDED_RE = /women|women's|womens|\bwpl\b/i;
+
+const extractYearsFromText = (value) => {
+	const years = [];
+	for (const m of String(value || '').matchAll(/\b(20\d{2})\b/g)) {
+		const y = Number(m[1]);
+		if (Number.isFinite(y) && y >= 2008 && y <= 2100) years.push(y);
+	}
+	return years;
+};
+
+const buildSeriesMatchesUrl = (href) => {
+	const abs = absoluteCricbuzzUrl(href);
+	if (!abs) return null;
+	const trimmed = String(abs).split('#')[0].split('?')[0].replace(/\/+$/, '');
+	if (/\/matches$/i.test(trimmed)) return trimmed;
+	return `${trimmed}/matches`;
+};
+
+const findLatestIplEditionMatchesUrl = async () => {
+	const currentYear = new Date().getFullYear();
+	const sourceUrls = [
+		'https://www.cricbuzz.com/cricket-schedule/upcoming-series',
+		'https://www.cricbuzz.com/cricket-schedule/upcoming-series/all',
+		'https://www.cricbuzz.com/cricket-series',
+		'https://www.cricbuzz.com/cricket-series/archives',
+	];
+
+	let best = null;
+
+	for (const sourceUrl of sourceUrls) {
+		// eslint-disable-next-line no-await-in-loop
+		const html = await fetchPage(sourceUrl, 'ipl_series_lookup');
+		if (!html) continue;
+
+		const $ = cheerio.load(html);
+		$('a[href*="/cricket-series/"]').each((_, el) => {
+			const href = String($(el).attr('href') || '').trim();
+			if (!href) return;
+
+			const text = normalizeWhitespace($(el).text());
+			const hay = `${text} ${href}`.toLowerCase();
+			if (!IPL_NAME_RE.test(hay)) return;
+			if (IPL_EXCLUDED_RE.test(hay)) return;
+
+			const years = extractYearsFromText(`${text} ${href}`);
+			const year = years.length ? Math.max(...years) : null;
+
+			let score = 0;
+			if (/indian\s+premier\s+league|indian-premier-league/i.test(hay)) score += 300;
+			if (href.includes('/matches')) score += 25;
+			if (year != null) {
+				if (year === currentYear) score += 160;
+				else if (year === currentYear - 1) score += 140;
+				else if (year < currentYear) score += Math.max(0, 120 - (currentYear - year) * 12);
+				else score -= 30;
+			}
+
+			const candidate = {
+				score,
+				year: year ?? -1,
+				href,
+				text,
+				matchesUrl: buildSeriesMatchesUrl(href),
+			};
+
+			if (!candidate.matchesUrl) return;
+
+			if (!best) {
+				best = candidate;
+				return;
+			}
+
+			if (candidate.score > best.score) {
+				best = candidate;
+				return;
+			}
+
+			if (candidate.score === best.score && candidate.year > best.year) {
+				best = candidate;
+			}
+		});
+	}
+
+	if (!best?.matchesUrl) return null;
+
+	return {
+		matchesUrl: best.matchesUrl,
+		seriesName: best.text || `Indian Premier League ${best.year > 0 ? best.year : ''}`.trim(),
+	};
+};
+
+const isLikelyPlayedIplMatchText = (value) => {
+	const t = String(value || '').toLowerCase();
+	if (!t) return false;
+
+	const hasPlayedMarkers =
+		/\b(live|won by|beat by|tied|no result|abandoned|drawn|stumps|innings|trail by|lead by|opt to bat|result)\b/.test(t) ||
+		/\b\d+\/\d+\b/.test(t) ||
+		/\b\d+(?:\.\d+)?\s*ov\b/.test(t);
+
+	if (hasPlayedMarkers) return true;
+
+	const hasUpcomingMarkers = /\b(match starts|starts in|preview|yet to begin|to begin|scheduled|upcoming)\b/.test(t);
+	if (hasUpcomingMarkers) return false;
+
+	return false;
+};
+
+export const scrapeLatestIplEditionMatchesPlayedSoFar = async () => {
+	try {
+		const now = Date.now();
+		if (now - iplRecentEditionCache.ts < IPL_RECENT_EDITION_CACHE_TTL_MS && Array.isArray(iplRecentEditionCache.data)) {
+			return iplRecentEditionCache.data;
+		}
+
+		const series = await findLatestIplEditionMatchesUrl();
+		if (!series?.matchesUrl) {
+			iplRecentEditionCache.ts = Date.now();
+			iplRecentEditionCache.data = [];
+			return [];
+		}
+
+		const html = await fetchPage(series.matchesUrl, 'ipl_recent_edition_matches');
+		if (!html) {
+			iplRecentEditionCache.ts = Date.now();
+			iplRecentEditionCache.data = [];
+			return [];
+		}
+
+		const $ = cheerio.load(html);
+		const formatByMatchId = new Map();
+		try {
+			const scan = String(html).replace(/\\"/g, '"');
+			const re = /"matchId"\s*:\s*(\d+)[\s\S]{0,700}?"matchFormat"\s*:\s*"(T20I?|ODI|TEST)"/gi;
+			let m;
+			while ((m = re.exec(scan)) !== null) {
+				const fmt = parseMatchType(m[2]);
+				if (fmt) formatByMatchId.set(String(m[1]), fmt);
+			}
+		} catch {
+			// ignore
+		}
+
+		const anchors = $('a[href*="/live-cricket-scores/"], a[href*="/cricket-scores/"]');
+		const matches = [];
+
+		anchors.each((_, el) => {
+			const $a = $(el);
+			const href = $a.attr('href') || '';
+			if (!isMatchHref(href)) return;
+
+			const parsed = parseMatchCard($a);
+			if (!parsed?.matchUrl) return;
+
+			const combinedText = `${parsed.contextText || ''} ${parsed.rawText || ''}`;
+			if (!isLikelyPlayedIplMatchText(combinedText)) return;
+
+			const matchId = extractMatchIdFromUrl(parsed.matchUrl);
+			const matchType =
+				parseMatchType(combinedText) ||
+				(matchId ? formatByMatchId.get(String(matchId)) : null) ||
+				'T20';
+
+			matches.push({
+				matchId: matchId || null,
+				matchUrl: parsed.matchUrl,
+				matchName: parsed.matchName,
+				team1: parsed.team1,
+				team2: parsed.team2,
+				matchType,
+				matchStatus: /\blive\b|\bopt to bat\b|\binnings\b|\bstumps\b|\b\d+(?:\.\d+)?\s*ov\b/i.test(combinedText)
+					? 'LIVE'
+					: 'TODAY',
+				league: 'IPL',
+				seriesName: series.seriesName,
+				rawText: parsed.contextText || parsed.rawText,
+			});
+		});
+
+		const deduped = dedupeMatchesByKey(matches);
+		console.log(`[Scraper] IPL recent edition played matches: ${deduped.length}`);
+
+		iplRecentEditionCache.ts = Date.now();
+		iplRecentEditionCache.data = deduped;
+		return deduped;
+	} catch (error) {
+		console.error('[Scraper] scrapeLatestIplEditionMatchesPlayedSoFar failed:', error?.message);
+		return [];
+	}
+};
+
 
 
 /**
@@ -883,7 +1161,9 @@ export const scrapeLiveAndTodayMatches = async () => {
 		const html = await fetchPage(url, 'cricbuzz_live_today');
 		if (!html) {
 			console.warn('[Scraper] Failed to fetch Cricbuzz live/today page');
-			return [];
+			const retainedOnly = collectRetainedLiveTodayMatches([], now);
+			matchListCache.liveToday = { ts: Date.now(), data: retainedOnly };
+			return retainedOnly;
 		}
 
 		const $ = cheerio.load(html);
@@ -943,7 +1223,9 @@ export const scrapeLiveAndTodayMatches = async () => {
 
 		if (matches.length === 0) {
 			console.warn('No matches found — DOM may have changed');
-			return [];
+			const retainedOnly = collectRetainedLiveTodayMatches([], now);
+			matchListCache.liveToday = { ts: Date.now(), data: retainedOnly };
+			return retainedOnly;
 		}
 
 		// Fill formats from cache immediately (fast path)
@@ -953,11 +1235,16 @@ export const scrapeLiveAndTodayMatches = async () => {
 			if (cachedFormat) m.matchType = cachedFormat;
 		}
 
-		void enrichMatchesWithFormat(matches, { max: 8, delayMs: 150 });
+		rememberLiveTodayMatches(matches, now);
+		const retainedRecent = collectRetainedLiveTodayMatches(matches, now);
+		const combinedMatches = dedupeMatchesByKey([...matches, ...retainedRecent]);
 
-		console.log('[Scraper] First match object:', matches[0]);
-		matchListCache.liveToday = { ts: Date.now(), data: matches };
-		return matches;
+		void enrichMatchesWithFormat(combinedMatches, { max: 8, delayMs: 150 });
+
+		console.log(`[Scraper] Retained recent matches: ${retainedRecent.length}`);
+		console.log('[Scraper] First match object:', combinedMatches[0]);
+		matchListCache.liveToday = { ts: Date.now(), data: combinedMatches };
+		return combinedMatches;
 	} catch (error) {
 		console.error('[Scraper] scrapeLiveAndTodayMatches failed:', error?.message);
 		return [];
@@ -1385,6 +1672,7 @@ export const getNormalizedMatches = async (matchType = 'live') => {
 export default {
 	scrapeTodayAndLiveMatches,
 	scrapeUpcomingMatches,
+	scrapeLatestIplEditionMatchesPlayedSoFar,
 	scrapeMatchDetails,
 	scrapeMatchScorecard,
 	scrapeCricbuzzScorecardPlayerStats,

@@ -1,6 +1,7 @@
 import {
 	scrapeTodayAndLiveMatches,
 	scrapeUpcomingMatches,
+	scrapeLatestIplEditionMatchesPlayedSoFar,
 	scrapeMatchSquadsAndPlayingXI,
 	scrapeMatchScorecard,
 } from '../services/scraper.service.js';
@@ -29,32 +30,66 @@ const setCachedData = (key, data) => {
 	};
 };
 
+const dedupeMatches = (matches) => {
+	const out = [];
+	const seen = new Set();
+
+	for (const match of Array.isArray(matches) ? matches : []) {
+		const key = String(
+			match?.matchId ||
+			match?.id ||
+			match?.matchUrl ||
+			`${String(match?.matchName || '').trim()}|${String(match?.team1 || '').trim()}|${String(match?.team2 || '').trim()}`,
+		).trim();
+		if (!key || seen.has(key)) continue;
+		seen.add(key);
+		out.push(match);
+	}
+
+	return out;
+};
+
 const shouldBypassCache = (req) => {
 	const v = String(req?.query?.nocache || req?.query?.refresh || '').toLowerCase();
 	return v === '1' || v === 'true' || v === 'yes';
 };
 
+const shouldIncludeIplSeason = (req) => {
+	const v = String(req?.query?.includeIplSeason || req?.query?.iplSeason || req?.query?.ipl || '').toLowerCase();
+	return v === '1' || v === 'true' || v === 'yes';
+};
+
 export const getMatches = async (req, res, next) => {
 	try {
+		const includeIplSeason = shouldIncludeIplSeason(req);
+		const cacheKey = includeIplSeason ? 'today_matches_with_ipl_recent' : 'today_matches';
+
 		// Check cache first unless bypassed
 		if (!shouldBypassCache(req)) {
-			const cached = getCachedData('today_matches');
+			const cached = getCachedData(cacheKey);
 			if (cached) {
 				return res.status(200).json(cached);
 			}
 		} else {
-			delete cache.today_matches;
+			delete cache[cacheKey];
 		}
 
-		const matches = await scrapeTodayAndLiveMatches();
-		if (!matches || matches.length === 0) {
+		const liveToday = await scrapeTodayAndLiveMatches();
+		let payload = Array.isArray(liveToday) ? liveToday : [];
+
+		if (includeIplSeason) {
+			const iplRecent = await scrapeLatestIplEditionMatchesPlayedSoFar();
+			payload = dedupeMatches([...(payload || []), ...(Array.isArray(iplRecent) ? iplRecent : [])]);
+		}
+
+		if (!payload || payload.length === 0) {
 			return res.status(502).json({ message: 'Failed to fetch matches' });
 		}
 		
 		// Cache successful response
-		setCachedData('today_matches', matches);
+		setCachedData(cacheKey, payload);
 		
-		return res.status(200).json(matches);
+		return res.status(200).json(payload);
 	} catch (error) {
 		next(error);
 	}

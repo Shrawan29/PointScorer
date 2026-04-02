@@ -142,7 +142,7 @@ export const DashboardMatches = () => {
 	const dataRef = useRef({ todayMatches: [], upcomingMatches: [] });
 
 	const [activeTab, setActiveTab] = useState(TAB_TODAY);
-	const [matchType, setMatchType] = useState(TYPE_ALL);
+	const [matchType, setMatchType] = useState(TYPE_IPL);
 	const [search, setSearch] = useState('');
 	const [searchInput, setSearchInput] = useState('');
 
@@ -271,7 +271,7 @@ export const DashboardMatches = () => {
 
 	useEffect(() => {
 		loadMatches(true, { includeIplSeason: matchType === TYPE_IPL });
-	}, []);
+	}, [matchType]);
 
 	// Auto-refresh in the background while formats are still missing.
 	useEffect(() => {
@@ -398,6 +398,17 @@ export const DashboardMatches = () => {
 								</button>
 								<button
 									type="button"
+									onClick={() => handleMatchTypeChange(TYPE_IPL)}
+									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+										matchType === TYPE_IPL
+											? 'bg-slate-900 text-white border-slate-900'
+											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+									}`}
+								>
+									IPL
+								</button>
+								<button
+									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_T20)}
 									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
 										matchType === TYPE_T20
@@ -428,17 +439,6 @@ export const DashboardMatches = () => {
 									}`}
 								>
 									Test
-								</button>
-								<button
-									type="button"
-									onClick={() => handleMatchTypeChange(TYPE_IPL)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-										matchType === TYPE_IPL
-											? 'bg-slate-900 text-white border-slate-900'
-											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-									}`}
-								>
-									IPL
 								</button>
 							</div>
 						</div>

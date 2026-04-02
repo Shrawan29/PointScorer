@@ -152,35 +152,45 @@ export const DashboardMatches = () => {
 		dataRef.current = data;
 	}, [data]);
 
-	const fetchMatchesFromApi = async ({ bypassBackendCache = false, includeIplSeason = false } = {}) => {
-		const todayParams = [];
+	const fetchMatchesFromApi = async ({ bypassBackendCache = false, includeIplSeason = false, requestedType = TYPE_ALL } = {}) => {
+		const normalizedType = String(requestedType || TYPE_ALL).toUpperCase();
+		const commonParams = [];
+		if (normalizedType !== TYPE_ALL) commonParams.push(`matchType=${encodeURIComponent(normalizedType)}`);
+
+		const todayParams = [...commonParams];
 		if (bypassBackendCache) todayParams.push('nocache=1');
 		if (includeIplSeason) todayParams.push('includeIplSeason=1');
 		const todayUrl = `/api/cricket/matches${todayParams.length ? `?${todayParams.join('&')}` : ''}`;
-		const upcomingUrl = bypassBackendCache ? '/api/cricket/matches/upcoming?nocache=1' : '/api/cricket/matches/upcoming';
+
+		const upcomingParams = [...commonParams];
+		if (bypassBackendCache) upcomingParams.push('nocache=1');
+		const upcomingUrl = `/api/cricket/matches/upcoming${upcomingParams.length ? `?${upcomingParams.join('&')}` : ''}`;
 
 		let todayArray = [];
 		let upcomingArray = [];
 		const errors = [];
 
-		// Load today/live matches first (priority)
-		try {
-			const todayRes = await axiosInstance.get(todayUrl);
-			const todayBody = todayRes?.data;
+		const [todayResult, upcomingResult] = await Promise.allSettled([
+			axiosInstance.get(todayUrl),
+			Promise.race([
+				axiosInstance.get(upcomingUrl),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000)),
+			]),
+		]);
+
+		if (todayResult.status === 'fulfilled') {
+			const todayBody = todayResult.value?.data;
 			todayArray = Array.isArray(todayBody) ? todayBody : [];
-		} catch (e) {
+		} else {
+			const e = todayResult.reason;
 			errors.push(e?.response?.data?.message || 'Failed to load today/live matches');
 		}
 
-		// Load upcoming matches (with timeout)
-		try {
-			const upcomingRes = await Promise.race([
-				axiosInstance.get(upcomingUrl),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000)),
-			]);
-			const upcomingBody = upcomingRes?.data;
+		if (upcomingResult.status === 'fulfilled') {
+			const upcomingBody = upcomingResult.value?.data;
 			upcomingArray = Array.isArray(upcomingBody) ? upcomingBody : [];
-		} catch (e) {
+		} else {
+			const e = upcomingResult.reason;
 			errors.push(e?.response?.data?.message || 'Failed to load upcoming matches');
 		}
 
@@ -191,7 +201,8 @@ export const DashboardMatches = () => {
 
 	const loadMatches = async (useCache = true, options = {}) => {
 		const includeIplSeason = Boolean(options?.includeIplSeason);
-		const cacheKey = includeIplSeason ? 'cricketMatchesCacheV3_ipl' : 'cricketMatchesCacheV3';
+		const requestedType = String(options?.requestedType || TYPE_ALL).toUpperCase();
+		const cacheKey = `cricketMatchesCacheV4_${includeIplSeason ? 'ipl' : 'base'}_${requestedType}`;
 		const reqId = (requestSeqRef.current += 1);
 
 		// Manual refresh should show loading; background refresh shouldn't.
@@ -209,34 +220,29 @@ export const DashboardMatches = () => {
 						const age = Date.now() - Number(cached?.ts || 0);
 						// Cache for 2 hours (7200000 ms)
 						if (age >= 0 && age < 7200000 && cached?.data) {
-							// If cached data has no matchType at all, it's likely pre-backend-fix.
-							// Skip cache so we fetch fresh data.
 							const today = Array.isArray(cached?.data?.todayMatches) ? cached.data.todayMatches : [];
 							const upcoming = Array.isArray(cached?.data?.upcomingMatches) ? cached.data.upcomingMatches : [];
 							const all = [...today, ...upcoming];
-							const hasAnyType = all.some((m) => Boolean(m?.matchType));
 							const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
-							if (hasAnyType) {
-								if (requestSeqRef.current === reqId) setData(cached.data);
-								// If some formats are still missing, refresh in background.
-								if (hasMissingType) {
-									void (async () => {
+							if (requestSeqRef.current === reqId) setData(cached.data);
+							// If some formats are still missing on the ALL view, refresh in background.
+							if (hasMissingType && requestedType === TYPE_ALL) {
+								void (async () => {
+									try {
+										const res = await fetchMatchesFromApi({ bypassBackendCache: false, includeIplSeason, requestedType });
+										if (requestSeqRef.current !== reqId) return;
+										setData(res.nextData);
 										try {
-											const res = await fetchMatchesFromApi({ bypassBackendCache: false, includeIplSeason });
-											if (requestSeqRef.current !== reqId) return;
-											setData(res.nextData);
-											try {
-												sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: res.nextData }));
-											} catch {
-												// ignore
-											}
+											sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: res.nextData }));
+										} catch {
+											// ignore
+										}
 									} catch {
 										// ignore background refresh failures
 									}
 								})();
-								}
-								return;
 							}
+							return;
 						}
 					} catch {
 						// ignore cache parse errors
@@ -251,7 +257,11 @@ export const DashboardMatches = () => {
 				}
 			}
 
-			const { nextData, errors } = await fetchMatchesFromApi({ bypassBackendCache: !useCache, includeIplSeason });
+			const { nextData, errors } = await fetchMatchesFromApi({
+				bypassBackendCache: !useCache,
+				includeIplSeason,
+				requestedType,
+			});
 			if (requestSeqRef.current !== reqId) return;
 			setData(nextData);
 			try {
@@ -270,7 +280,7 @@ export const DashboardMatches = () => {
 	};
 
 	useEffect(() => {
-		loadMatches(true, { includeIplSeason: matchType === TYPE_IPL });
+		loadMatches(true, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType });
 	}, [matchType]);
 
 	// Auto-refresh in the background while formats are still missing.
@@ -280,7 +290,7 @@ export const DashboardMatches = () => {
 			const all = [...(current?.todayMatches || []), ...(current?.upcomingMatches || [])];
 			const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
 			if (hasMissingType) {
-				void loadMatches(true, { includeIplSeason: matchType === TYPE_IPL });
+				void loadMatches(true, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType });
 			}
 		}, 15000);
 		return () => clearInterval(t);
@@ -303,40 +313,28 @@ export const DashboardMatches = () => {
 	const filteredTodayMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return todayMatches.filter((m) => {
-			const typeOk =
-				matchType === TYPE_ALL ||
-				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
-			if (!typeOk) return false;
-
 			if (!q) return true;
 			const haystack = `${m?.matchName || ''} ${teamsTextForSearch(m?.teams)} ${m?.rawText || ''} ${m?.matchType || ''} ${m?.matchStatus || ''}`.toLowerCase();
 			return haystack.includes(q);
 		});
-	}, [todayMatches, matchType, search]);
+	}, [todayMatches, search]);
 
 	const filteredUpcomingMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return upcomingMatches.filter((m) => {
-			const typeOk =
-				matchType === TYPE_ALL ||
-				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
-			if (!typeOk) return false;
-
 			if (!q) return true;
 			const haystack = `${m?.matchName || ''} ${teamsTextForSearch(m?.teams)} ${m?.rawText || ''} ${m?.matchType || ''} ${m?.matchStatus || ''}`.toLowerCase();
 			return haystack.includes(q);
 		});
-	}, [upcomingMatches, matchType, search]);
+	}, [upcomingMatches, search]);
 
 	const handleMatchTypeChange = (nextType) => {
 		setMatchType(nextType);
 		if (nextType === TYPE_IPL) setActiveTab(TAB_TODAY);
-		void loadMatches(false, { includeIplSeason: nextType === TYPE_IPL });
 	};
 
 	const applySearchFilter = () => {
 		setSearch(searchInput);
-		void loadMatches(false, { includeIplSeason: matchType === TYPE_IPL });
 	};
 
 	return (
@@ -370,7 +368,7 @@ export const DashboardMatches = () => {
 						</button>
 						<button
 							type="button"
-							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL })}
+							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType })}
 							disabled={loading}
 							className="px-3 py-2 rounded-md text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
 							title="Clear cache and refresh"

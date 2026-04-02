@@ -139,6 +139,7 @@ export const DashboardMatches = () => {
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState('');
 	const requestSeqRef = useRef(0);
+	const iplSeasonHydratedRef = useRef(false);
 	const dataRef = useRef({ todayMatches: [], upcomingMatches: [] });
 
 	const [activeTab, setActiveTab] = useState(TAB_TODAY);
@@ -152,7 +153,12 @@ export const DashboardMatches = () => {
 		dataRef.current = data;
 	}, [data]);
 
-	const fetchMatchesFromApi = async ({ bypassBackendCache = false, includeIplSeason = false, requestedType = TYPE_ALL } = {}) => {
+	const fetchMatchesFromApi = async ({
+		bypassBackendCache = false,
+		includeIplSeason = false,
+		requestedType = TYPE_ALL,
+		onPartialData = null,
+	} = {}) => {
 		const normalizedType = String(requestedType || TYPE_ALL).toUpperCase();
 		const commonParams = [];
 		if (normalizedType !== TYPE_ALL) commonParams.push(`matchType=${encodeURIComponent(normalizedType)}`);
@@ -170,31 +176,31 @@ export const DashboardMatches = () => {
 		let upcomingArray = [];
 		const errors = [];
 
-		const [todayResult, upcomingResult] = await Promise.allSettled([
-			axiosInstance.get(todayUrl),
-			Promise.race([
-				axiosInstance.get(upcomingUrl),
-				new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000)),
-			]),
-		]);
+		const todayRequest = axiosInstance
+			.get(todayUrl)
+			.then((res) => (Array.isArray(res?.data) ? res.data : []))
+			.catch((e) => {
+				errors.push(e?.response?.data?.message || 'Failed to load today/live matches');
+				return [];
+			});
 
-		if (todayResult.status === 'fulfilled') {
-			const todayBody = todayResult.value?.data;
-			todayArray = Array.isArray(todayBody) ? todayBody : [];
-		} else {
-			const e = todayResult.reason;
-			errors.push(e?.response?.data?.message || 'Failed to load today/live matches');
-		}
+		const upcomingRequest = Promise.race([
+			axiosInstance.get(upcomingUrl),
+			new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000)),
+		])
+			.then((res) => (Array.isArray(res?.data) ? res.data : []))
+			.catch((e) => {
+				errors.push(e?.response?.data?.message || 'Failed to load upcoming matches');
+				return [];
+			});
 
-		if (upcomingResult.status === 'fulfilled') {
-			const upcomingBody = upcomingResult.value?.data;
-			upcomingArray = Array.isArray(upcomingBody) ? upcomingBody : [];
-		} else {
-			const e = upcomingResult.reason;
-			errors.push(e?.response?.data?.message || 'Failed to load upcoming matches');
-		}
-
+		todayArray = await todayRequest;
 		const todayMatches = todayArray.map((m) => normalizeMatch(m, TAB_TODAY));
+		if (typeof onPartialData === 'function') {
+			onPartialData({ todayMatches });
+		}
+
+		upcomingArray = await upcomingRequest;
 		const upcomingMatches = upcomingArray.map((m) => normalizeMatch(m, TAB_UPCOMING));
 		return { nextData: { todayMatches, upcomingMatches }, errors };
 	};
@@ -229,7 +235,15 @@ export const DashboardMatches = () => {
 							if (hasMissingType && requestedType === TYPE_ALL) {
 								void (async () => {
 									try {
-										const res = await fetchMatchesFromApi({ bypassBackendCache: false, includeIplSeason, requestedType });
+										const res = await fetchMatchesFromApi({
+											bypassBackendCache: false,
+											includeIplSeason,
+											requestedType,
+											onPartialData: (partialData) => {
+												if (requestSeqRef.current !== reqId) return;
+												setData((prev) => ({ ...prev, ...partialData }));
+											},
+										});
 										if (requestSeqRef.current !== reqId) return;
 										setData(res.nextData);
 										try {
@@ -261,6 +275,10 @@ export const DashboardMatches = () => {
 				bypassBackendCache: !useCache,
 				includeIplSeason,
 				requestedType,
+				onPartialData: (partialData) => {
+					if (requestSeqRef.current !== reqId) return;
+					setData((prev) => ({ ...prev, ...partialData }));
+				},
 			});
 			if (requestSeqRef.current !== reqId) return;
 			setData(nextData);
@@ -290,11 +308,11 @@ export const DashboardMatches = () => {
 			const all = [...(current?.todayMatches || []), ...(current?.upcomingMatches || [])];
 			const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
 			if (hasMissingType) {
-				void loadMatches(true, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType });
+				void loadMatches(true, { includeIplSeason: false, requestedType: TYPE_ALL });
 			}
 		}, 15000);
 		return () => clearInterval(t);
-	}, [matchType]);
+	}, []);
 
 	useEffect(() => {
 		setSearchInput(search);
@@ -313,25 +331,40 @@ export const DashboardMatches = () => {
 	const filteredTodayMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return todayMatches.filter((m) => {
+			const typeOk =
+				matchType === TYPE_ALL ||
+				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
+			if (!typeOk) return false;
+
 			if (!q) return true;
 			const haystack = `${m?.matchName || ''} ${teamsTextForSearch(m?.teams)} ${m?.rawText || ''} ${m?.matchType || ''} ${m?.matchStatus || ''}`.toLowerCase();
 			return haystack.includes(q);
 		});
-	}, [todayMatches, search]);
+	}, [todayMatches, matchType, search]);
 
 	const filteredUpcomingMatches = useMemo(() => {
 		const q = search.trim().toLowerCase();
 		return upcomingMatches.filter((m) => {
+			const typeOk =
+				matchType === TYPE_ALL ||
+				(matchType === TYPE_IPL ? isIplMatch(m) : String(m?.matchType || '').toUpperCase() === matchType);
+			if (!typeOk) return false;
+
 			if (!q) return true;
 			const haystack = `${m?.matchName || ''} ${teamsTextForSearch(m?.teams)} ${m?.rawText || ''} ${m?.matchType || ''} ${m?.matchStatus || ''}`.toLowerCase();
 			return haystack.includes(q);
 		});
-	}, [upcomingMatches, search]);
+	}, [upcomingMatches, matchType, search]);
 
 	const handleMatchTypeChange = (nextType) => {
 		setMatchType(nextType);
-		if (nextType === TYPE_IPL) setActiveTab(TAB_TODAY);
-		void loadMatches(true, { includeIplSeason: nextType === TYPE_IPL, requestedType: nextType });
+		if (nextType === TYPE_IPL) {
+			setActiveTab(TAB_TODAY);
+			if (!iplSeasonHydratedRef.current) {
+				iplSeasonHydratedRef.current = true;
+				void loadMatches(true, { includeIplSeason: true, requestedType: TYPE_ALL });
+			}
+		}
 	};
 
 	const applySearchFilter = () => {
@@ -369,7 +402,7 @@ export const DashboardMatches = () => {
 						</button>
 						<button
 							type="button"
-							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType })}
+							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL, requestedType: TYPE_ALL })}
 							disabled={loading}
 							className="px-3 py-2 rounded-md text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
 							title="Clear cache and refresh"

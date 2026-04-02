@@ -280,8 +280,8 @@ export const DashboardMatches = () => {
 	};
 
 	useEffect(() => {
-		loadMatches(true, { includeIplSeason: matchType === TYPE_IPL, requestedType: matchType });
-	}, [matchType]);
+		void loadMatches(true, { includeIplSeason: false, requestedType: TYPE_ALL });
+	}, []);
 
 	// Auto-refresh in the background while formats are still missing.
 	useEffect(() => {
@@ -331,6 +331,7 @@ export const DashboardMatches = () => {
 	const handleMatchTypeChange = (nextType) => {
 		setMatchType(nextType);
 		if (nextType === TYPE_IPL) setActiveTab(TAB_TODAY);
+		void loadMatches(true, { includeIplSeason: nextType === TYPE_IPL, requestedType: nextType });
 	};
 
 	const applySearchFilter = () => {

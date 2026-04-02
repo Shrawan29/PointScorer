@@ -142,7 +142,7 @@ export const DashboardMatches = () => {
 	const dataRef = useRef({ todayMatches: [], upcomingMatches: [] });
 
 	const [activeTab, setActiveTab] = useState(TAB_TODAY);
-	const [matchType, setMatchType] = useState(TYPE_IPL);
+	const [matchType, setMatchType] = useState(TYPE_ALL);
 	const [search, setSearch] = useState('');
 	const [searchInput, setSearchInput] = useState('');
 

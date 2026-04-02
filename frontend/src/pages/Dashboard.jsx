@@ -263,6 +263,16 @@ export const DashboardMatches = () => {
 		});
 	}, [upcomingMatches, matchType, search]);
 
+	const handleMatchTypeChange = (nextType) => {
+		setMatchType(nextType);
+		void loadMatches(false);
+	};
+
+	const applySearchFilter = () => {
+		setSearch(searchInput);
+		void loadMatches(false);
+	};
+
 	return (
 		<Card title="Matches">
 			{error && <Alert type="error">{error}</Alert>}
@@ -311,7 +321,7 @@ export const DashboardMatches = () => {
 							<div className="flex flex-wrap gap-2">
 								<button
 									type="button"
-									onClick={() => setMatchType(TYPE_ALL)}
+									onClick={() => handleMatchTypeChange(TYPE_ALL)}
 									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
 										matchType === TYPE_ALL
 											? 'bg-slate-900 text-white border-slate-900'
@@ -322,7 +332,7 @@ export const DashboardMatches = () => {
 								</button>
 								<button
 									type="button"
-									onClick={() => setMatchType(TYPE_T20)}
+									onClick={() => handleMatchTypeChange(TYPE_T20)}
 									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
 										matchType === TYPE_T20
 											? 'bg-slate-900 text-white border-slate-900'
@@ -333,7 +343,7 @@ export const DashboardMatches = () => {
 								</button>
 								<button
 									type="button"
-									onClick={() => setMatchType(TYPE_ODI)}
+									onClick={() => handleMatchTypeChange(TYPE_ODI)}
 									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
 										matchType === TYPE_ODI
 											? 'bg-slate-900 text-white border-slate-900'
@@ -344,7 +354,7 @@ export const DashboardMatches = () => {
 								</button>
 								<button
 									type="button"
-									onClick={() => setMatchType(TYPE_TEST)}
+									onClick={() => handleMatchTypeChange(TYPE_TEST)}
 									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
 										matchType === TYPE_TEST
 											? 'bg-slate-900 text-white border-slate-900'
@@ -363,14 +373,14 @@ export const DashboardMatches = () => {
 									value={searchInput}
 									onChange={(e) => setSearchInput(e.target.value)}
 									onKeyDown={(e) => {
-										if (e.key === 'Enter') setSearch(searchInput);
+										if (e.key === 'Enter') applySearchFilter();
 									}}
 									placeholder="Search match or team"
 									className="w-full sm:w-64 px-3 py-2 border border-slate-200 rounded-md bg-white text-sm"
 								/>
 								<button
 									type="button"
-									onClick={() => setSearch(searchInput)}
+									onClick={applySearchFilter}
 									className="px-3 py-2 rounded-md text-sm border bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
 								>
 									Search

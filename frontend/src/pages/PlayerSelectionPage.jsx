@@ -8,20 +8,56 @@ import Card from '../components/Card.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 
-const uniqueStrings = (arr) => {
+const STAFF_ROLE_RE = /\b(coach|assistant\s+coach|head\s+coach|batting\s+coach|bowling\s+coach|fielding\s+coach|mentor|manager|physio|physiotherapist|trainer|analyst|support\s+staff|team\s+doctor|masseur|selector|consultant)\b/i;
+
+const normalizePlayerKey = (value) =>
+  String(value || '')
+    .replace(/[\u2020†*]/g, '')
+    .replace(/\[(?:[^\]]*)\]/g, '')
+    .replace(/\((?:[^)]*)\)/g, '')
+    .replace(/[,]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+const sanitizePlayerName = (value) => {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return '';
+
+  const cleaned = raw
+    .replace(/^[\d\s.)\-•*]+/, '')
+    .replace(/[\u2020†*]/g, '')
+    .replace(/\[(?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\]/gi, '')
+    .replace(/\((?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\)/gi, '')
+    .replace(/\((?:[^)]*\b(?:coach|physio|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector)\b[^)]*)\)/gi, '')
+    .replace(/\s*[-:]\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
+    .replace(/,\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!cleaned) return '';
+  if (STAFF_ROLE_RE.test(cleaned)) return '';
+  if (!/[A-Za-z]/.test(cleaned)) return '';
+  if (cleaned.length < 2 || cleaned.length > 45) return '';
+
+  return cleaned;
+};
+
+const uniquePlayers = (arr) => {
   const out = [];
   const seen = new Set();
   for (const v of Array.isArray(arr) ? arr : []) {
-    const s = String(v || '').trim();
+    const s = sanitizePlayerName(v);
     if (!s) continue;
-    if (seen.has(s)) continue;
-    seen.add(s);
+    const key = normalizePlayerKey(s);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
     out.push(s);
   }
   return out;
 };
 
-const clampPlayers = (arr) => uniqueStrings(arr).slice(0, 9);
+const clampPlayers = (arr) => uniquePlayers(arr).slice(0, 9);
 
 export const PlayerSelectionPage = () => {
   const { sessionId } = useParams();
@@ -61,9 +97,9 @@ export const PlayerSelectionPage = () => {
   const showPlayingXI = Boolean(squads?.isPlayingXIDeclared && hasTeamPlayingXI);
 
   const availablePlayers = useMemo(() => {
-    const list = showPlayingXI
+    const list = uniquePlayers(showPlayingXI
       ? [...(squads?.team1?.playingXI || []), ...(squads?.team2?.playingXI || [])]
-      : [...(squads?.team1?.squad || []), ...(squads?.team2?.squad || [])];
+      : [...(squads?.team1?.squad || []), ...(squads?.team2?.squad || [])]);
 		const q = search.trim().toLowerCase();
 		if (!q) return list;
 		return list.filter((p) => String(p).toLowerCase().includes(q));
@@ -74,20 +110,20 @@ export const PlayerSelectionPage = () => {
 		const grouped = {};
 
     if (showPlayingXI && hasTeamPlayingXI) {
-      grouped[team1Name || 'Team 1'] = squads?.team1?.playingXI || [];
-      grouped[team2Name || 'Team 2'] = squads?.team2?.playingXI || [];
+      grouped[team1Name || 'Team 1'] = uniquePlayers(squads?.team1?.playingXI || []);
+      grouped[team2Name || 'Team 2'] = uniquePlayers(squads?.team2?.playingXI || []);
       return grouped;
     }
 
     if (hasTeamSquads) {
-      grouped[team1Name || 'Team 1'] = squads?.team1?.squad || [];
-      grouped[team2Name || 'Team 2'] = squads?.team2?.squad || [];
+      grouped[team1Name || 'Team 1'] = uniquePlayers(squads?.team1?.squad || []);
+      grouped[team2Name || 'Team 2'] = uniquePlayers(squads?.team2?.squad || []);
       return grouped;
     }
 
     // Last resort (should be rare): show whatever list we have without team separation
     const fallback = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
-    grouped['Players'] = fallback;
+		grouped['Players'] = uniquePlayers(fallback);
 		
 		return grouped;
   }, [squads, hasTeamPlayingXI, hasTeamSquads, showPlayingXI, team1Name, team2Name]);
@@ -162,8 +198,8 @@ export const PlayerSelectionPage = () => {
   const s = selectionRes.data;
   const up = Array.isArray(s?.userPlayers) && s.userPlayers.length > 0 ? s.userPlayers : s?.selectedPlayers || [];
   const fp = s?.friendPlayers || [];
-  setUserPlayers(uniqueStrings(up));
-  setFriendPlayers(uniqueStrings(fp));
+  setUserPlayers(uniquePlayers(up));
+  setFriendPlayers(uniquePlayers(fp));
   setUserCaptain(s?.userCaptain || s?.captain || '');
   setFriendCaptain(s?.friendCaptain || '');
 

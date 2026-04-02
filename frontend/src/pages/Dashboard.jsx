@@ -48,9 +48,57 @@ const teamsTextForSearch = (teams) => {
 	return '';
 };
 
+const IPL_TEAM_TOKENS = new Set([
+	'kkr',
+	'kolkata knight riders',
+	'srh',
+	'sunrisers hyderabad',
+	'mi',
+	'mumbai indians',
+	'csk',
+	'chennai super kings',
+	'rcb',
+	'royal challengers bengaluru',
+	'royal challengers bangalore',
+	'dc',
+	'delhi capitals',
+	'rr',
+	'rajasthan royals',
+	'pbks',
+	'punjab kings',
+	'kxip',
+	'kings xi punjab',
+	'lsg',
+	'lucknow super giants',
+	'gt',
+	'gujarat titans',
+]);
+
+const normalizeTeamToken = (value) =>
+	String(value || '')
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+
+const isLikelyIplTeam = (value) => {
+	const token = normalizeTeamToken(value);
+	if (!token) return false;
+	return IPL_TEAM_TOKENS.has(token);
+};
+
+const isLikelyIplTeamsPair = (match) => {
+	const list = Array.isArray(match?.teams)
+		? match.teams.map((t) => (typeof t === 'string' ? t : t?.name || t?.teamName || t?.shortName || t?.teamSName)).filter(Boolean)
+		: [];
+	if (list.length < 2) return false;
+	return isLikelyIplTeam(list[0]) && isLikelyIplTeam(list[1]);
+};
+
 const isIplMatch = (match) => {
 	const text = `${match?.league || ''} ${match?.seriesName || ''} ${match?.matchName || ''} ${match?.rawText || ''}`.toLowerCase();
-	return /indian premier league|\bipl\b/.test(text) && !/women|women's|womens|\bwpl\b/.test(text);
+	if (/indian premier league|\bipl\b/.test(text) && !/women|women's|womens|\bwpl\b/.test(text)) return true;
+	return isLikelyIplTeamsPair(match);
 };
 
 const extractMatchId = (value) => {
@@ -282,6 +330,7 @@ export const DashboardMatches = () => {
 
 	const handleMatchTypeChange = (nextType) => {
 		setMatchType(nextType);
+		if (nextType === TYPE_IPL) setActiveTab(TAB_TODAY);
 		void loadMatches(false, { includeIplSeason: nextType === TYPE_IPL });
 	};
 

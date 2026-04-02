@@ -754,6 +754,88 @@ const pickCardContainer = ($a) => {
 	return null;
 };
 
+const toTitleFromSlug = (value) => {
+	const out = normalizeWhitespace(String(value || '').replace(/[-_]+/g, ' '));
+	if (!out) return null;
+	return out
+		.split(' ')
+		.map((w) => (w.length > 2 ? w[0].toUpperCase() + w.slice(1) : w.toUpperCase()))
+		.join(' ');
+};
+
+const IPL_TEAM_TOKENS = new Set([
+	'kkr',
+	'kolkata knight riders',
+	'srh',
+	'sunrisers hyderabad',
+	'mi',
+	'mumbai indians',
+	'csk',
+	'chennai super kings',
+	'rcb',
+	'royal challengers bengaluru',
+	'royal challengers bangalore',
+	'dc',
+	'delhi capitals',
+	'rr',
+	'rajasthan royals',
+	'pbks',
+	'punjab kings',
+	'kxip',
+	'kings xi punjab',
+	'lsg',
+	'lucknow super giants',
+	'gt',
+	'gujarat titans',
+	'dd',
+	'deccan chargers',
+	'pwi',
+	'puni warriors india',
+	'kochituskers kerala',
+	'kochi tuskers kerala',
+]);
+
+const normalizeTeamToken = (value) =>
+	normalizeWhitespace(value)
+		.toLowerCase()
+		.replace(/[^a-z0-9\s]/g, '')
+		.trim();
+
+const isLikelyIplTeam = (value) => {
+	const token = normalizeTeamToken(value);
+	if (!token) return false;
+	if (IPL_TEAM_TOKENS.has(token)) return true;
+	return false;
+};
+
+const isLikelyIplTeamsPair = (team1, team2) => isLikelyIplTeam(team1) && isLikelyIplTeam(team2);
+
+const extractSeriesNameFromMatchUrl = (matchUrl) => {
+	const u = String(matchUrl || '');
+	if (!u) return null;
+
+	const seriesSeg = u.match(/\/series\/([^/]+)\//i)?.[1];
+	if (seriesSeg) return toTitleFromSlug(seriesSeg);
+
+	const tailSeg = u.match(/\/(?:live-cricket-scores|cricket-scores)\/\d+\/([^/?#]+)/i)?.[1];
+	if (!tailSeg) return null;
+
+	const iplPart = String(tailSeg).match(/indian-premier-league(?:-[a-z0-9-]+)?/i)?.[0];
+	if (iplPart) return toTitleFromSlug(iplPart);
+
+	if (/\bipl\b/i.test(tailSeg)) return 'IPL';
+
+	return null;
+};
+
+const deriveLeagueFromSeriesName = (seriesName) => {
+	const s = String(seriesName || '').toLowerCase();
+	if (/indian premier league|\bipl\b/.test(s) && !/women|women's|womens|\bwpl\b/.test(s)) {
+		return 'IPL';
+	}
+	return null;
+};
+
 const parseMatchCard = ($a) => {
 	const href = $a.attr('href') || '';
 	const matchUrl = absoluteCricbuzzUrl(href);
@@ -801,11 +883,19 @@ const parseMatchCard = ($a) => {
 	if (!matchName && team1 && team2) matchName = `${team1} vs ${team2}`;
 	if (!matchName) matchName = rawText || null;
 
+	const seriesName = extractSeriesNameFromMatchUrl(matchUrl);
+	let league = deriveLeagueFromSeriesName(seriesName);
+	if (!league && isLikelyIplTeamsPair(team1, team2)) {
+		league = 'IPL';
+	}
+
 	return {
 		matchUrl,
 		matchName,
 		team1,
 		team2,
+		seriesName: seriesName || (league === 'IPL' ? 'Indian Premier League' : null),
+		league,
 		matchStatus,
 		startTimeText,
 		contextText,
@@ -1215,6 +1305,8 @@ export const scrapeLiveAndTodayMatches = async () => {
 				matchName: parsed.matchName,
 				team1: parsed.team1,
 				team2: parsed.team2,
+				seriesName: parsed.seriesName,
+				league: parsed.league,
 				matchType,
 				matchStatus: parsed.matchStatus,
 				rawText: parsed.contextText || parsed.rawText,
@@ -1332,6 +1424,8 @@ export const scrapeUpcomingMatches = async () => {
 				matchName: parsed.matchName,
 				team1: parsed.team1,
 				team2: parsed.team2,
+				seriesName: parsed.seriesName,
+				league: parsed.league,
 				matchType,
 				matchStatus: 'UPCOMING',
 				startTimeText: parsed.startTimeText,

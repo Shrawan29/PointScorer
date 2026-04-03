@@ -192,7 +192,7 @@ const uniqueStrings = (arr) => {
 	return out;
 };
 
-const STAFF_ROLE_RE = /\b(coach|assistant\s+coach|head\s+coach|batting\s+coach|bowling\s+coach|fielding\s+coach|mentor|manager|physio|physiotherapist|trainer|analyst|support\s+staff|team\s+doctor|masseur|selector|consultant)\b/i;
+const STAFF_ROLE_RE = /\b(coaches?|assistant\s+coaches?|head\s+coaches?|batting\s+coaches?|bowling\s+coaches?|fielding\s+coaches?|mentor|manager|team\s+manager|physio|physiotherapist|trainer|analyst|support\s+staff|staff|team\s+doctor|masseur|selector|consultant|director|scout)\b/i;
 const META_PLAYER_LABEL_RE = /\b(playing\s*xi|xi\s*declared|line\s*-?\s*up|lineup|squad|substitutes?|reserves?|impact\s+players?)\b/i;
 
 const sanitizePlayerName = (value) => {
@@ -204,9 +204,10 @@ const sanitizePlayerName = (value) => {
 		.replace(/[\u2020†*]/g, '')
 		.replace(/\[(?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\]/gi, '')
 		.replace(/\((?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\)/gi, '')
-		.replace(/\((?:[^)]*\b(?:coach|physio|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector)\b[^)]*)\)/gi, '')
+		.replace(/\((?:[^)]*\b(?:coaches?|physio|physiotherapist|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector|consultant|director|scout)\b[^)]*)\)/gi, '')
 		.replace(/\s*[-:]\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
 		.replace(/,\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
+		.replace(/[,:;]+$/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
 
@@ -536,21 +537,27 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 	if (!matchUrl) return null;
 	await delay(SCRAPER_DELAY_MS);
 
-	const team1Name = normalizeWhitespace(options?.team1Name || '') || null;
-	const team2Name = normalizeWhitespace(options?.team2Name || '') || null;
+	const teamsFromUrl = extractTeamsFromMatchUrlSlug(matchUrl);
+	const team1Name = normalizeWhitespace(options?.team1Name || teamsFromUrl?.team1 || '') || null;
+	const team2Name = normalizeWhitespace(options?.team2Name || teamsFromUrl?.team2 || '') || null;
 
 	const matchId = extractMatchIdFromUrl(matchUrl);
 	const base = String(matchUrl);
 	const urlCandidates = [];
 
-	// Prefer links found on the match page (most stable), but fall back to common patterns.
-	urlCandidates.push(base);
+	// Prefer squads pages first for cleaner team-wise player extraction.
 	if (base.includes('/live-cricket-scores/')) {
+		urlCandidates.push(`${base}/squads`);
+		urlCandidates.push(`${base.replace('/live-cricket-scores/', '/cricket-scores/')}/squads`);
+		urlCandidates.push(base);
 		urlCandidates.push(base.replace('/live-cricket-scores/', '/cricket-scores/'));
 		urlCandidates.push(`${base}/scorecard`);
-		urlCandidates.push(`${base}/squads`);
+	} else {
+		urlCandidates.push(base);
 	}
 	if (matchId) {
+		urlCandidates.push(`https://www.cricbuzz.com/live-cricket-scores/${matchId}/squads`);
+		urlCandidates.push(`https://www.cricbuzz.com/cricket-scores/${matchId}/squads`);
 		urlCandidates.push(`https://www.cricbuzz.com/cricket-scores/${matchId}`);
 		urlCandidates.push(`https://www.cricbuzz.com/cricket-scores/${matchId}/scorecard`);
 		urlCandidates.push(`https://www.cricbuzz.com/live-cricket-scores/${matchId}`);
@@ -561,11 +568,16 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 	if (!matchHtml) return null;
 
 	const $match = cheerio.load(matchHtml);
+	const squadsHref = $match('a')
+		.toArray()
+		.map((el) => ({ href: el?.attribs?.href, text: normalizeWhitespace($match(el).text()) }))
+		.find((a) => a?.href && /squads?/i.test(a.text || '') && String(a.href).includes(String(matchId || '')))?.href;
 	const scorecardHref = $match('a')
 		.toArray()
 		.map((el) => ({ href: el?.attribs?.href, text: normalizeWhitespace($match(el).text()) }))
 		.find((a) => a?.href && /scorecard/i.test(a.text || '') && String(a.href).includes(String(matchId || '')))?.href;
-	if (scorecardHref) urlCandidates.unshift(absoluteCricbuzzUrl(scorecardHref));
+	if (squadsHref) urlCandidates.unshift(absoluteCricbuzzUrl(squadsHref));
+	if (scorecardHref) urlCandidates.push(absoluteCricbuzzUrl(scorecardHref));
 
 	const { url: fetchedUrl, html } = await tryFetchFirstWorking(uniqueStrings(urlCandidates), `cricbuzz_squads_${matchId || 'x'}`);
 	if (!html) return null;
@@ -605,45 +617,231 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 		}
 	}
 
-	// Attempt 2: get player names from player profile links (fallback)
-	const profilePlayers = uniquePlayers(
-		$('a[href*="/profiles/"]')
-			.toArray()
-			.map((el) => {
-				const name = normalizeWhitespace($(el).text());
-				if (!name) return '';
+	const normalizeTeamLabel = (value) =>
+		normalizeWhitespace(value)
+			.toLowerCase()
+			.replace(/\b(team|squad|players?|playing|xi|lineup|line\s*up)\b/g, ' ')
+			.replace(/[^a-z0-9\s]/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim();
 
-				const rowText = normalizeWhitespace($(el).closest('li,tr,div,p,span').first().text());
-				if (isLikelyStaffContext(rowText)) return '';
+	const TEAM_CODE_ALIASES = {
+		csk: ['chennai super kings'],
+		pbks: ['punjab kings', 'kings xi punjab'],
+		kkr: ['kolkata knight riders'],
+		srh: ['sunrisers hyderabad'],
+		mi: ['mumbai indians'],
+		rcb: ['royal challengers bengaluru', 'royal challengers bangalore'],
+		dc: ['delhi capitals'],
+		rr: ['rajasthan royals'],
+		lsg: ['lucknow super giants'],
+		gt: ['gujarat titans'],
+		ind: ['india'],
+		aus: ['australia'],
+		nz: ['new zealand'],
+		eng: ['england'],
+		sa: ['south africa'],
+		wi: ['west indies'],
+		afg: ['afghanistan'],
+		pak: ['pakistan'],
+		sl: ['sri lanka'],
+		ban: ['bangladesh'],
+	};
 
-				return name;
-			}),
-	);
+	const getTeamAliases = (value) => {
+		const raw = normalizeWhitespace(value);
+		if (!raw) return [];
+
+		const out = new Set();
+		const normalized = normalizeTeamLabel(raw);
+		if (normalized) out.add(normalized);
+
+		const tokens = normalized.split(' ').filter(Boolean);
+		if (tokens.length > 1) {
+			const initials = tokens.map((t) => t[0]).join('');
+			if (initials.length >= 2) out.add(initials);
+			out.add(tokens.join(''));
+		}
+
+		const compact = normalizeWhitespace(raw)
+			.toLowerCase()
+			.replace(/[^a-z0-9\s]/g, ' ')
+			.replace(/\s+/g, ' ')
+			.trim();
+		if (compact) out.add(compact);
+
+		const compactToken = compact.replace(/\s+/g, '');
+		const mapped = TEAM_CODE_ALIASES[compactToken];
+		if (Array.isArray(mapped)) {
+			for (const alias of mapped) {
+				const normalizedAlias = normalizeTeamLabel(alias);
+				if (normalizedAlias) out.add(normalizedAlias);
+			}
+		}
+
+		return [...out].filter(Boolean);
+	};
+
+	const scoreTeamText = (teamName, text) => {
+		if (!teamName || !text) return 0;
+		const target = normalizeTeamLabel(text);
+		if (!target) return 0;
+
+		const aliases = getTeamAliases(teamName);
+		let score = 0;
+
+		for (const alias of aliases) {
+			if (!alias) continue;
+			if (target === alias) {
+				score = Math.max(score, 100);
+				continue;
+			}
+			if (target.includes(alias) || alias.includes(target)) {
+				score = Math.max(score, 72);
+				continue;
+			}
+
+			const aliasTokens = alias.split(' ').filter(Boolean);
+			const targetTokens = new Set(target.split(' ').filter(Boolean));
+			let overlap = 0;
+			for (const tk of aliasTokens) {
+				if (targetTokens.has(tk)) overlap += 1;
+			}
+			if (overlap >= Math.max(1, Math.min(2, aliasTokens.length))) {
+				score = Math.max(score, 58);
+			}
+		}
+
+		if (/\b(squad|playing\s*xi|lineup|players?)\b/i.test(text)) score += 12;
+		return score;
+	};
+
+	const isTeamText = (teamName, text) => scoreTeamText(teamName, text) >= 55;
+
+	const collectContextTextsForLink = ($el) => {
+		const contexts = [];
+		const pushContext = (value) => {
+			const t = normalizeWhitespace(value);
+			if (!t) return;
+			contexts.push(t.slice(0, 320));
+		};
+
+		pushContext($el.text());
+
+		for (const sel of ['li', 'tr', 'p', 'td', 'th', 'div', 'section', 'article']) {
+			const $ctx = $el.closest(sel).first();
+			if ($ctx?.length) pushContext($ctx.text());
+		}
+
+		let $parent = $el.parent();
+		let depth = 0;
+		while ($parent && $parent.length && depth < 4) {
+			pushContext($parent.text());
+			$parent = $parent.parent();
+			depth += 1;
+		}
+
+		let $node = $el;
+		let hops = 0;
+		while ($node && $node.length && hops < 4) {
+			const $prevLabel = $node.prevAll('h1,h2,h3,h4,h5,strong,b,label,th,td,span,div,p').first();
+			if ($prevLabel?.length) pushContext($prevLabel.text());
+			$node = $node.parent();
+			hops += 1;
+		}
+
+		return uniqueStrings(contexts);
+	};
+
+	const getProfileEntry = ($el) => {
+		const rawName = normalizeWhitespace($el.text());
+		if (!rawName) return null;
+
+		const contexts = collectContextTextsForLink($el);
+		if (contexts.some((ctx) => isLikelyStaffContext(ctx))) return null;
+
+		const cleanedName = sanitizePlayerName(rawName);
+		if (!cleanedName) return null;
+
+		return { name: cleanedName, contexts };
+	};
+
+	const profileEntries = $('a[href*="/profiles/"]')
+		.toArray()
+		.map((el) => getProfileEntry($(el)))
+		.filter(Boolean);
+
+	const profilePlayers = uniquePlayers(profileEntries.map((entry) => entry.name));
+
+	const profilePlayersByTeam = (() => {
+		const team1 = [];
+		const team2 = [];
+		for (const entry of profileEntries) {
+			const joinedContext = entry.contexts.join(' ');
+			const s1 = scoreTeamText(team1Name, joinedContext);
+			const s2 = scoreTeamText(team2Name, joinedContext);
+
+			if (s1 >= 55 && s1 >= s2 + 8) {
+				team1.push(entry.name);
+				continue;
+			}
+			if (s2 >= 55 && s2 >= s1 + 8) {
+				team2.push(entry.name);
+			}
+		}
+
+		return {
+			team1: uniquePlayers(team1),
+			team2: uniquePlayers(team2),
+		};
+	})();
 
 	const allPlayers = uniquePlayers([...(allPlayingXI.length ? allPlayingXI : []), ...profilePlayers]);
 
 	const looksLikeTeamHeader = (text) => {
 		const t = normalizeWhitespace(text);
 		if (!t) return false;
-		if (team1Name && t === team1Name) return true;
-		if (team2Name && t === team2Name) return true;
+		if (team1Name && isTeamText(team1Name, t)) return true;
+		if (team2Name && isTeamText(team2Name, t)) return true;
 		return false;
 	};
 
 	const findTeamHeaderEl = (name) => {
 		if (!name) return null;
-		const candidates = $('h1,h2,h3,h4,h5,div,span')
-			.toArray()
-			.map((el) => ({ el, text: normalizeWhitespace($(el).text()) }))
-			.filter((x) => x.text && x.text === name);
-		return candidates.length ? candidates[0].el : null;
+
+		let best = null;
+		$('h1,h2,h3,h4,h5,strong,b,th,td,div,span,p').each((_, el) => {
+			const text = normalizeWhitespace($(el).text());
+			if (!text || text.length > 120) return;
+			if (isLikelyStaffContext(text)) return;
+
+			const score = scoreTeamText(name, text);
+			if (score < 55) return;
+
+			if (!best || score > best.score) {
+				best = { el, score };
+			}
+		});
+
+		return best?.el || null;
 	};
+
+	const extractProfileNamesFromNode = ($node) =>
+		uniquePlayers(
+			$node
+				.find('a[href*="/profiles/"]')
+				.toArray()
+				.map((el) => {
+					const entry = getProfileEntry($(el));
+					return entry?.name || '';
+				}),
+		);
 
 	const collectPlayersAfterHeader = (headerEl) => {
 		if (!headerEl) return [];
+
 		const $header = $(headerEl);
-		const $parent = $header.parent();
-		if (!$parent?.length) return [];
+		if (!$header?.length) return [];
 
 		const players = [];
 		let $sib = $header.next();
@@ -653,34 +851,76 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 			const t = normalizeWhitespace($sib.text());
 			if (looksLikeTeamHeader(t)) break;
 			if (isLikelyStaffContext(t)) break;
-			players.push(
-				...$sib
-					.find('a[href*="/profiles/"]')
-					.toArray()
-					.map((el) => {
-						const name = normalizeWhitespace($(el).text());
-						if (!name) return '';
-
-						const rowText = normalizeWhitespace($(el).closest('li,tr,div,p,span').first().text());
-						if (isLikelyStaffContext(rowText)) return '';
-
-						return name;
-					}),
-			);
+			players.push(...extractProfileNamesFromNode($sib));
 			$sib = $sib.next();
 		}
 		return uniquePlayers(players);
 	};
 
+	const collectTeamPlayersFromText = (teamName, mode = 'squad') => {
+		if (!teamName) return [];
+
+		const out = [];
+		for (const line of textBlobs) {
+			const t = normalizeWhitespace(line);
+			if (!t) continue;
+			if (!isTeamText(teamName, t)) continue;
+			if (isLikelyStaffContext(t)) continue;
+
+			let payload = '';
+			if (mode === 'xi') {
+				payload = t.split(/playing\s*xi\s*[:\-]/i)[1] || t.split(/\bxi\b\s*[:\-]/i)[1] || '';
+			} else {
+				payload =
+					t.split(/squad\s*[:\-]/i)[1] ||
+					t.split(/players?\s*[:\-]/i)[1] ||
+					t.split(/playing\s*xi\s*[:\-]/i)[1] ||
+					'';
+			}
+
+			if (!payload) continue;
+			const players = splitPlayersList(payload);
+			if (players.length >= 2) out.push(...players);
+		}
+
+		return uniquePlayers(out);
+	};
+
 	// Team-separated squad players (no mixing)
 	const team1HeaderEl = findTeamHeaderEl(team1Name);
 	const team2HeaderEl = findTeamHeaderEl(team2Name);
-	const team1SquadPlayers = collectPlayersAfterHeader(team1HeaderEl);
-	const team2SquadPlayers = collectPlayersAfterHeader(team2HeaderEl);
+	let team1SquadPlayers = uniquePlayers([
+		...collectPlayersAfterHeader(team1HeaderEl),
+		...profilePlayersByTeam.team1,
+		...collectTeamPlayersFromText(team1Name, 'squad'),
+	]);
+	let team2SquadPlayers = uniquePlayers([
+		...collectPlayersAfterHeader(team2HeaderEl),
+		...profilePlayersByTeam.team2,
+		...collectTeamPlayersFromText(team2Name, 'squad'),
+	]);
+
+	if (team1SquadPlayers.length === 0 && team2SquadPlayers.length === 0 && allPlayers.length >= 2) {
+		const mid = Math.ceil(allPlayers.length / 2);
+		team1SquadPlayers = uniquePlayers(allPlayers.slice(0, mid));
+		team2SquadPlayers = uniquePlayers(allPlayers.slice(mid));
+	}
 
 	const playingXIKeys = new Set(uniquePlayers(allPlayingXI).map((p) => normalizePlayerKey(p)));
-	const team1XIPlayers = uniquePlayers(team1SquadPlayers.filter((p) => playingXIKeys.has(normalizePlayerKey(p))));
-	const team2XIPlayers = uniquePlayers(team2SquadPlayers.filter((p) => playingXIKeys.has(normalizePlayerKey(p))));
+	let team1XIPlayers = uniquePlayers([
+		...collectTeamPlayersFromText(team1Name, 'xi'),
+		...team1SquadPlayers.filter((p) => playingXIKeys.has(normalizePlayerKey(p))),
+	]);
+	let team2XIPlayers = uniquePlayers([
+		...collectTeamPlayersFromText(team2Name, 'xi'),
+		...team2SquadPlayers.filter((p) => playingXIKeys.has(normalizePlayerKey(p))),
+	]);
+
+	if (team1XIPlayers.length === 0 && team2XIPlayers.length === 0 && allPlayingXI.length >= 2) {
+		const xiMid = Math.ceil(allPlayingXI.length / 2);
+		team1XIPlayers = uniquePlayers(allPlayingXI.slice(0, xiMid));
+		team2XIPlayers = uniquePlayers(allPlayingXI.slice(xiMid));
+	}
 
 	return {
 		matchId: matchId || null,
@@ -1641,17 +1881,30 @@ export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
 	if (!id) return null;
 
 	const cached = squadsCache.get(id);
-	if (cached && Date.now() - cached.ts < SQUADS_CACHE_TTL_MS) return cached.data;
+	if (cached && Date.now() - cached.ts < SQUADS_CACHE_TTL_MS) {
+		const cachedData = cached.data;
+		const team1Cached = uniquePlayers(cachedData?.team1?.squad || []);
+		const team2Cached = uniquePlayers(cachedData?.team2?.squad || []);
+		const mergedCached = uniquePlayers([...(cachedData?.players || []), ...team1Cached, ...team2Cached]);
+		const hasStaffLeak = mergedCached.some((name) => isLikelyStaffContext(name));
+		const hasTeamSeparation = team1Cached.length > 0 || team2Cached.length > 0;
+
+		if (hasTeamSeparation && !hasStaffLeak) return cachedData;
+		squadsCache.delete(id);
+	}
 
 	// Find the match URL from our cached lists
 	const [todayLive, upcoming] = await Promise.all([scrapeTodayAndLiveMatches(), scrapeUpcomingMatches()]);
 	const list = [...(todayLive || []), ...(upcoming || [])];
 	const match = list.find((m) => String(m?.matchUrl || '').includes(`/${id}/`)) || null;
 	if (!match?.matchUrl) return null;
+	const teamsFromUrl = extractTeamsFromMatchUrlSlug(match.matchUrl);
+	const resolvedTeam1Name = normalizeWhitespace(match.team1 || teamsFromUrl?.team1 || '') || null;
+	const resolvedTeam2Name = normalizeWhitespace(match.team2 || teamsFromUrl?.team2 || '') || null;
 
 	const data = await scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl(match.matchUrl, {
-		team1Name: match.team1 || null,
-		team2Name: match.team2 || null,
+		team1Name: resolvedTeam1Name,
+		team2Name: resolvedTeam2Name,
 	});
 	if (!data) return null;
 
@@ -1667,12 +1920,12 @@ export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
 		matchUrl: match.matchUrl,
 		matchName: match.matchName || null,
 		team1: {
-			name: match.team1 || null,
+			name: resolvedTeam1Name,
 			squad: team1Squad,
 			playingXI: team1XI,
 		},
 		team2: {
-			name: match.team2 || null,
+			name: resolvedTeam2Name,
 			squad: team2Squad,
 			playingXI: team2XI,
 		},

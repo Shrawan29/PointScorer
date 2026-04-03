@@ -8,13 +8,56 @@ import Card from '../components/Card.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 
-const STAFF_ROLE_RE = /\b(coach|assistant\s+coach|head\s+coach|batting\s+coach|bowling\s+coach|fielding\s+coach|mentor|manager|physio|physiotherapist|trainer|analyst|support\s+staff|team\s+doctor|masseur|selector|consultant)\b/i;
+const STAFF_ROLE_RE = /\b(coaches?|assistant\s+coaches?|head\s+coaches?|batting\s+coaches?|bowling\s+coaches?|fielding\s+coaches?|mentor|manager|team\s+manager|physio|physiotherapist|trainer|analyst|support\s+staff|staff|team\s+doctor|masseur|selector|consultant|director|scout)\b/i;
+const PLAYER_ROLE_SUFFIX_RE = /(WK-?Batter|Batting Allrounder|Bowling Allrounder|Allrounder|Batter|Bowler|Wicket-?Keeper|Keeper)$/i;
+const PLAYER_WITH_ROLE_RE = /^(.*?)(?:\s+)?(WK-?Batter|Batting Allrounder|Bowling Allrounder|Allrounder|Batter|Bowler|Wicket-?Keeper|Keeper)$/i;
+
+const normalizeRoleLabel = (value) => {
+  const key = String(value || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (key === 'wkbatter' || key === 'wicketkeeperbatter' || key === 'wicketkeeper') return 'WK-Batter';
+  if (key === 'battingallrounder') return 'Batting Allrounder';
+  if (key === 'bowlingallrounder') return 'Bowling Allrounder';
+  if (key === 'allrounder') return 'Allrounder';
+  if (key === 'batter') return 'Batter';
+  if (key === 'bowler') return 'Bowler';
+  if (key === 'keeper') return 'Wicketkeeper';
+  return String(value || '').replace(/\s+/g, ' ').trim();
+};
+
+const splitPlayerNameAndRole = (value) => {
+  const raw = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!raw) return { name: '', role: null };
+
+  const withRoleBoundary = raw.replace(
+    /([a-z])(?=(WK-?Batter|Batting Allrounder|Bowling Allrounder|Allrounder|Batter|Bowler|Wicket-?Keeper|Keeper)$)/i,
+    '$1 '
+  );
+
+  const m = withRoleBoundary.match(PLAYER_WITH_ROLE_RE);
+  if (!m) {
+    return {
+      name: withRoleBoundary.replace(/\s+/g, ' ').trim(),
+      role: null,
+    };
+  }
+
+  const name = String(m[1] || '').replace(/[,:;\-]+$/g, '').replace(/\s+/g, ' ').trim();
+  const role = normalizeRoleLabel(m[2]);
+  return { name, role: role || null };
+};
+
+const formatPlayerLabel = (value) => {
+  const { name, role } = splitPlayerNameAndRole(value);
+  if (!name) return '';
+  return role ? `${name} (${role})` : name;
+};
 
 const normalizePlayerKey = (value) =>
   String(value || '')
     .replace(/[\u2020†*]/g, '')
     .replace(/\[(?:[^\]]*)\]/g, '')
     .replace(/\((?:[^)]*)\)/g, '')
+    .replace(PLAYER_ROLE_SUFFIX_RE, '')
     .replace(/[,]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -29,9 +72,10 @@ const sanitizePlayerName = (value) => {
     .replace(/[\u2020†*]/g, '')
     .replace(/\[(?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\]/gi, '')
     .replace(/\((?:c|vc|wk|wk\/c|c\/wk|captain|vice\s*captain|sub|substitute|reserve|impact\s*player)\)/gi, '')
-    .replace(/\((?:[^)]*\b(?:coach|physio|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector)\b[^)]*)\)/gi, '')
+    .replace(/\((?:[^)]*\b(?:coaches?|physio|physiotherapist|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector|consultant|director|scout)\b[^)]*)\)/gi, '')
     .replace(/\s*[-:]\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
     .replace(/,\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
+    .replace(/[,:;]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -85,48 +129,65 @@ export const PlayerSelectionPage = () => {
   const team1Name = squads?.team1?.name || null;
   const team2Name = squads?.team2?.name || null;
 
-  const hasTeamSquads = Boolean(
-    Array.isArray(squads?.team1?.squad) && squads.team1.squad.length > 0 &&
-    Array.isArray(squads?.team2?.squad) && squads.team2.squad.length > 0,
-  );
-  const hasTeamPlayingXI = Boolean(
-    Array.isArray(squads?.team1?.playingXI) && squads.team1.playingXI.length > 0 &&
-    Array.isArray(squads?.team2?.playingXI) && squads.team2.playingXI.length > 0,
-  );
+  const team1SquadPlayers = useMemo(() => uniquePlayers(squads?.team1?.squad || []), [squads?.team1?.squad]);
+  const team2SquadPlayers = useMemo(() => uniquePlayers(squads?.team2?.squad || []), [squads?.team2?.squad]);
+  const team1PlayingXIPlayers = useMemo(() => uniquePlayers(squads?.team1?.playingXI || []), [squads?.team1?.playingXI]);
+  const team2PlayingXIPlayers = useMemo(() => uniquePlayers(squads?.team2?.playingXI || []), [squads?.team2?.playingXI]);
+
+  const hasTeamSquads = team1SquadPlayers.length > 0 || team2SquadPlayers.length > 0;
+  const hasTeamPlayingXI = team1PlayingXIPlayers.length > 0 || team2PlayingXIPlayers.length > 0;
 
   const showPlayingXI = Boolean(squads?.isPlayingXIDeclared && hasTeamPlayingXI);
 
   const availablePlayers = useMemo(() => {
     const list = uniquePlayers(showPlayingXI
-      ? [...(squads?.team1?.playingXI || []), ...(squads?.team2?.playingXI || [])]
-      : [...(squads?.team1?.squad || []), ...(squads?.team2?.squad || [])]);
+      ? [...team1PlayingXIPlayers, ...team2PlayingXIPlayers]
+      : [...team1SquadPlayers, ...team2SquadPlayers]);
 		const q = search.trim().toLowerCase();
 		if (!q) return list;
 		return list.filter((p) => String(p).toLowerCase().includes(q));
-  }, [squads, search, showPlayingXI]);
+  }, [team1PlayingXIPlayers, team2PlayingXIPlayers, team1SquadPlayers, team2SquadPlayers, search, showPlayingXI]);
 
 	// Group players by team
 	const playersByTeam = useMemo(() => {
 		const grouped = {};
 
     if (showPlayingXI && hasTeamPlayingXI) {
-      grouped[team1Name || 'Team 1'] = uniquePlayers(squads?.team1?.playingXI || []);
-      grouped[team2Name || 'Team 2'] = uniquePlayers(squads?.team2?.playingXI || []);
-      return grouped;
+      if (team1PlayingXIPlayers.length > 0) grouped[team1Name || 'Team 1'] = team1PlayingXIPlayers;
+      if (team2PlayingXIPlayers.length > 0) grouped[team2Name || 'Team 2'] = team2PlayingXIPlayers;
+      if (Object.keys(grouped).length > 0) return grouped;
     }
 
     if (hasTeamSquads) {
-      grouped[team1Name || 'Team 1'] = uniquePlayers(squads?.team1?.squad || []);
-      grouped[team2Name || 'Team 2'] = uniquePlayers(squads?.team2?.squad || []);
-      return grouped;
+      if (team1SquadPlayers.length > 0) grouped[team1Name || 'Team 1'] = team1SquadPlayers;
+      if (team2SquadPlayers.length > 0) grouped[team2Name || 'Team 2'] = team2SquadPlayers;
+      if (Object.keys(grouped).length > 0) return grouped;
     }
 
-    // Last resort (should be rare): show whatever list we have without team separation
-    const fallback = squads?.playingXI?.length ? squads.playingXI : squads?.players || [];
-		grouped['Players'] = uniquePlayers(fallback);
+    // Last resort: if we only have one flat list, keep a team-wise UI split.
+    const fallback = uniquePlayers(squads?.playingXI?.length ? squads.playingXI : squads?.players || []);
+		if ((team1Name || team2Name) && fallback.length >= 2) {
+			const splitIndex = Math.ceil(fallback.length / 2);
+			grouped[team1Name || 'Team 1'] = fallback.slice(0, splitIndex);
+			grouped[team2Name || 'Team 2'] = fallback.slice(splitIndex);
+			return grouped;
+		}
+
+		grouped['Players'] = fallback;
 		
 		return grouped;
-  }, [squads, hasTeamPlayingXI, hasTeamSquads, showPlayingXI, team1Name, team2Name]);
+  }, [
+    squads,
+    hasTeamPlayingXI,
+    hasTeamSquads,
+    showPlayingXI,
+    team1Name,
+    team2Name,
+    team1PlayingXIPlayers,
+    team2PlayingXIPlayers,
+    team1SquadPlayers,
+    team2SquadPlayers,
+  ]);
 
 	const filteredPlayersByTeam = useMemo(() => {
 		const q = search.trim().toLowerCase();
@@ -135,7 +196,7 @@ export const PlayerSelectionPage = () => {
 		const filtered = {};
 		Object.entries(playersByTeam).forEach(([team, players]) => {
 			const filteredPlayers = players.filter((p) => 
-				String(p).toLowerCase().includes(q)
+        String(p).toLowerCase().includes(q) || formatPlayerLabel(p).toLowerCase().includes(q)
 			);
 			if (filteredPlayers.length > 0) {
 				filtered[team] = filteredPlayers;
@@ -326,14 +387,14 @@ export const PlayerSelectionPage = () => {
                       disabled={isFrozen}
                       className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
                     />
-                    <div className="mt-3 max-h-64 overflow-auto border rounded-md">
+                    <div className="mt-3 border rounded-md bg-slate-50 p-2">
                       {Object.keys(filteredPlayersByTeam).length === 0 ? (
                     <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
                       ) : (
-                        <div className="divide-y">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
-                        <div key={teamName}>
-                          <div className={`px-3 py-2.5 font-semibold text-xs sm:text-sm sticky top-0 border-b-2 ${
+                        <div key={teamName} className="border rounded-md bg-white overflow-hidden min-w-0">
+                          <div className={`px-3 py-2.5 font-semibold text-xs sm:text-sm border-b-2 ${
                             teamIndex === 0 
                               ? 'bg-blue-50 text-blue-900 border-blue-200' 
                               : 'bg-orange-50 text-orange-900 border-orange-200'
@@ -347,12 +408,14 @@ export const PlayerSelectionPage = () => {
                               {teamName}
                             </div>
                           </div>
+                          <div className="max-h-64 overflow-auto divide-y">
                           {players.map((p) => {
                             const inUser = userPlayers.includes(p);
                             const inFriend = friendPlayers.includes(p);
+                            const displayLabel = formatPlayerLabel(p);
                             return (
                               <div key={p} className="p-2 flex items-center justify-between gap-2 hover:bg-slate-50">
-                                <div className="text-xs sm:text-sm text-slate-900 truncate">{p}</div>
+                                <div className="text-xs sm:text-sm text-slate-900 truncate">{displayLabel}</div>
                                 <div className="flex gap-1">
                                   <button
                                     type="button"
@@ -390,6 +453,7 @@ export const PlayerSelectionPage = () => {
                               </div>
                             );
                           })}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -405,7 +469,7 @@ export const PlayerSelectionPage = () => {
                     {userPlayers.length === 0 ? (
                       <span className="text-slate-400">No players selected yet</span>
                     ) : (
-                      userPlayers.join(', ')
+                      userPlayers.map((p) => formatPlayerLabel(p)).join(', ')
                     )}
                   </div>
                 </div>
@@ -417,7 +481,7 @@ export const PlayerSelectionPage = () => {
                     {friendPlayers.length === 0 ? (
                       <span className="text-slate-400">No players selected yet</span>
                     ) : (
-                      friendPlayers.join(', ')
+                      friendPlayers.map((p) => formatPlayerLabel(p)).join(', ')
                     )}
                   </div>
                 </div>
@@ -440,7 +504,7 @@ export const PlayerSelectionPage = () => {
                     <option value="">Select captain</option>
                     {userPlayers.map((p) => (
                       <option key={p} value={p}>
-                        {p}
+                        {formatPlayerLabel(p)}
                       </option>
                     ))}
                   </select>
@@ -457,7 +521,7 @@ export const PlayerSelectionPage = () => {
                     <option value="">Select captain</option>
                     {friendPlayers.map((p) => (
                       <option key={p} value={p}>
-                        {p}
+                        {formatPlayerLabel(p)}
                       </option>
                     ))}
                   </select>

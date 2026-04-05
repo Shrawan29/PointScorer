@@ -7,6 +7,7 @@ import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const STAFF_ROLE_RE = /\b(coaches?|assistant\s+coaches?|head\s+coaches?|batting\s+coaches?|bowling\s+coaches?|fielding\s+coaches?|mentor|manager|team\s+manager|physio|physiotherapist|trainer|analyst|support\s+staff|staff|team\s+doctor|masseur|selector|consultant|director|scout)\b/i;
 const PLAYER_ROLE_SUFFIX_RE = /(WK-?Batter|Batting Allrounder|Bowling Allrounder|Allrounder|Batter|Bowler|Wicket-?Keeper|Keeper)$/i;
@@ -105,6 +106,7 @@ const clampPlayers = (arr) => uniquePlayers(arr).slice(0, 9);
 
 export const PlayerSelectionPage = () => {
   const { sessionId } = useParams();
+  const { user } = useAuth();
 
   const [selection, setSelection] = useState(null);
   const [session, setSession] = useState(null);
@@ -125,6 +127,7 @@ export const PlayerSelectionPage = () => {
   const [freezing, setFreezing] = useState(false);
 
   const isFrozen = Boolean(selection?.isFrozen);
+  const userDisplayName = useMemo(() => user?.name || user?.email || 'User', [user]);
 
   const team1Name = squads?.team1?.name || null;
   const team2Name = squads?.team2?.name || null;
@@ -468,7 +471,7 @@ export const PlayerSelectionPage = () => {
 
               <div className="flex-1 grid grid-cols-1 gap-4">
                 <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
-                  <div className="text-sm font-semibold text-slate-900 mb-2">My team ({userPlayers.length}/9)</div>
+                  <div className="text-sm font-semibold text-slate-900 mb-2">{userDisplayName}'s team ({userPlayers.length}/9)</div>
                   <div className="text-xs text-slate-600 mb-2">Pick 6–9 players</div>
                   <div className="text-xs sm:text-sm text-slate-900 min-h-12 bg-white border border-slate-100 rounded p-2 break-words">
                     {userPlayers.length === 0 ? (
@@ -499,7 +502,7 @@ export const PlayerSelectionPage = () => {
             <Card title="Captains">
               <div className="grid gap-3 grid-cols-1">
                 <label className="block">
-                  <div className="text-sm font-medium text-slate-700 mb-1">My captain</div>
+                  <div className="text-sm font-medium text-slate-700 mb-1">{userDisplayName} captain</div>
                   <select
                     value={userCaptain}
                     onChange={(e) => setUserCaptain(e.target.value)}

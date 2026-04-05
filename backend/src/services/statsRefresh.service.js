@@ -179,7 +179,10 @@ export const recalculatePointsForSession = async ({ session, selection, ruleSet 
 	}
 
 	await PointsBreakdown.deleteMany({ sessionId: session._id });
-	const created = docsToInsert.length > 0 ? await PointsBreakdown.insertMany(docsToInsert, { ordered: true }) : [];
+	const createdDocs = docsToInsert.length > 0 ? await PointsBreakdown.insertMany(docsToInsert, { ordered: true }) : [];
+	const created = createdDocs.map((doc) =>
+		typeof doc?.toObject === 'function' ? doc.toObject() : doc
+	);
 
 	const userTotalPoints = created
 		.filter((r) => String(r?.team || 'USER') === 'USER')
@@ -246,8 +249,12 @@ export const refreshStatsAndRecalculateForSessionId = async ({ sessionId, userId
 		scorecardStatus.includes('match drawn') ||
 		scorecardStatus.includes('result');
 
-	if (isCompletedFromScorecard && session.status !== 'COMPLETED') {
-		await MatchSession.updateOne({ _id: session._id }, { $set: { status: 'COMPLETED' } });
+	if (isCompletedFromScorecard && (session.status !== 'COMPLETED' || !session.playedAt)) {
+		const completionUpdate = {
+			status: 'COMPLETED',
+			playedAt: session.playedAt || new Date(),
+		};
+		await MatchSession.updateOne({ _id: session._id }, { $set: completionUpdate });
 	}
 
 	return {

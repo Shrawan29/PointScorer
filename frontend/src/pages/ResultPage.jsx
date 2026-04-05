@@ -10,6 +10,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
 
 const isCompletedByScorecard = (meta) => {
   const state = String(meta?.scorecardState || '').toUpperCase();
@@ -31,8 +32,10 @@ export const ResultPage = () => {
 
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [fixing, setFixing] = useState(false);
+  const [freezingSelection, setFreezingSelection] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMeta, setRefreshMeta] = useState(null);
 
@@ -57,13 +60,17 @@ export const ResultPage = () => {
     [friendTeamSelected, allRows.length, friendRows.length]
   );
 
-  const userDisplayName = useMemo(() => user?.name || user?.email || 'My', [user]);
+  const userDisplayName = useMemo(() => user?.name || user?.email || 'User', [user]);
   const friendDisplayName = useMemo(
     () => data?.friendName || data?.friend?.friendName || 'Friend',
     [data]
   );
 
   const winnerSummary = useMemo(() => {
+    if (!data?.selectionFrozen) {
+      return 'Freeze selection to start scoring';
+    }
+
     const userPoints = toNumber(data?.userTotalPoints);
     const friendPoints = toNumber(data?.friendTotalPoints);
     const diff = Math.abs(userPoints - friendPoints);
@@ -82,24 +89,38 @@ export const ResultPage = () => {
       : `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`;
   }, [data, userDisplayName, friendDisplayName, refreshMeta]);
 
+  const isCompleted = useMemo(() => {
+    const state = String(data?.matchState || '').toUpperCase();
+    const status = String(data?.match?.status || '').toUpperCase();
+    return state === 'COMPLETED' || status === 'COMPLETED';
+  }, [data]);
+
+  const isUpcoming = useMemo(() => {
+    const state = String(data?.matchState || '').toUpperCase();
+    return state === 'UPCOMING' && !isCompleted;
+  }, [data, isCompleted]);
+
 	const canRefresh = useMemo(
-		() => Boolean(data?.selectionFrozen) && data?.matchState !== 'UPCOMING',
-		[data]
+    () => Boolean(data?.selectionFrozen),
+    [data]
 	);
 
   useEffect(() => {
     const run = async () => {
       setError('');
+      setInfo('');
       setLoading(true);
       try {
         const res = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
         const payload = res.data;
 
-			if (payload?.matchState === 'UPCOMING') {
+      const payloadStatus = String(payload?.match?.status || '').toUpperCase();
+      if (payload?.matchState === 'UPCOMING' && payloadStatus !== 'COMPLETED') {
 				setData(payload);
-				setError('Match not started yet');
+        setError('');
 				return;
 			}
+      setError('');
 
         // If points aren't calculated yet, attempt calculation once and refetch.
         if (Array.isArray(payload?.playerWisePoints) && payload.playerWisePoints.length === 0) {
@@ -128,8 +149,35 @@ export const ResultPage = () => {
     run();
   }, [sessionId]);
 
+  useEffect(() => {
+    const selectionFrozen = Boolean(data?.selectionFrozen);
+    const shouldAutoRefresh = selectionFrozen && !isCompleted;
+    if (!shouldAutoRefresh) return undefined;
+
+    const timer = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      try {
+        const res = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
+        setData(res.data);
+        const payloadStatus = String(res?.data?.match?.status || '').toUpperCase();
+        if (String(res?.data?.matchState || '').toUpperCase() !== 'UPCOMING' || payloadStatus === 'COMPLETED') {
+          setError('');
+        }
+        setRefreshMeta((prev) => ({
+          ...(prev || {}),
+          lastRefreshedAt: new Date().toISOString(),
+        }));
+      } catch {
+        // Ignore transient polling failures; manual refresh remains available.
+      }
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [data?.selectionFrozen, isCompleted, sessionId]);
+
   const onFixFriendPoints = async () => {
     setError('');
+    setInfo('');
     setFixing(true);
     try {
       await axiosInstance.post(`/api/scoring/session/${sessionId}/calculate?force=true`);
@@ -144,6 +192,7 @@ export const ResultPage = () => {
 
   const onRefreshStats = async () => {
     setError('');
+    setInfo('');
     setRefreshing(true);
     try {
       const resp = await axiosInstance.post(`/api/scoring/session/${sessionId}/refresh?force=true`);
@@ -185,6 +234,22 @@ export const ResultPage = () => {
     }
   };
 
+  const onFreezeSelection = async () => {
+    setError('');
+    setInfo('');
+    setFreezingSelection(true);
+    try {
+      await axiosInstance.post(`/api/player-selections/freeze/${sessionId}`);
+      const again = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
+      setData(again.data);
+      setInfo('Selection frozen. Auto scoring is now enabled.');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to freeze selection');
+    } finally {
+      setFreezingSelection(false);
+    }
+  };
+
   return (
     <Layout>
       <PageHeader
@@ -200,6 +265,21 @@ export const ResultPage = () => {
       />
 
       {error && <Alert type="error">{error}</Alert>}
+      {info && <Alert type="success">{info}</Alert>}
+
+      {!loading && data && !data?.selectionFrozen ? (
+        <Alert type="error">
+          Selection is not frozen yet. Freeze selection to calculate and auto-refresh points.
+        </Alert>
+      ) : null}
+
+      {!loading && data?.selectionFrozen && !isCompleted ? (
+        <Alert type="success">Auto-refresh is enabled (every 60 seconds).</Alert>
+      ) : null}
+
+      {!loading && isUpcoming ? (
+        <Alert type="error">Match not started yet</Alert>
+      ) : null}
 
       {loading ? (
         <div className="text-xs sm:text-sm text-slate-600">Loading...</div>
@@ -211,6 +291,14 @@ export const ResultPage = () => {
           <div className="text-xs sm:text-sm text-slate-700 mt-1">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
           <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
           <div className="text-xs sm:text-sm text-slate-700 mt-1">Result: {winnerSummary}</div>
+
+      {!data?.selectionFrozen ? (
+        <div className="mt-3 flex gap-2">
+          <Button onClick={onFreezeSelection} disabled={freezingSelection} fullWidth>
+            {freezingSelection ? 'Freezing...' : 'Freeze selection to start scoring'}
+          </Button>
+        </div>
+      ) : null}
 
       <div className="text-xs sm:text-sm mt-2">
         <span className="text-slate-700">Last refreshed: </span>
@@ -286,23 +374,27 @@ export const ResultPage = () => {
           </Card>
 
       <Card title={`${userDisplayName} player points`}>
-        {userRows.length === 0 ? (
+        {!data?.selectionFrozen ? (
+          <div className="text-xs sm:text-sm text-slate-600">Points will appear after selection is frozen.</div>
+        ) : userRows.length === 0 ? (
           <div className="text-xs sm:text-sm text-slate-600">No points found.</div>
         ) : (
           <div className="grid gap-2">
             {userRows
               .slice()
               .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
-              .map((r) => {
+              .map((r, idx) => {
                 const isCaptain = userCaptain && String(r.playerId) === String(userCaptain);
+                const playerLabel = String(r?.playerId || r?.playerName || 'Unknown player');
+                const playerPoints = typeof r?.totalPoints === 'number' ? r.totalPoints : 0;
                 return (
-                  <div key={r._id} className="flex items-center justify-between text-xs sm:text-sm">
+                  <div key={r._id || `USER:${playerLabel}:${idx}`} className="flex items-center justify-between text-xs sm:text-sm">
                     <div className="font-medium text-slate-900">
-                      {r.playerId}
+                      {playerLabel}
                       {isCaptain ? <span className="text-xs text-slate-600"> (Captain)</span> : null}
                     </div>
                     <div className={`font-semibold ${isCaptain ? 'text-slate-900' : 'text-slate-700'}`}>
-                      {r.totalPoints}
+                      {playerPoints}
                     </div>
                   </div>
                 );
@@ -312,23 +404,27 @@ export const ResultPage = () => {
       </Card>
 
       <Card title={`${friendDisplayName} player points`}>
-        {friendRows.length === 0 ? (
+        {!data?.selectionFrozen ? (
+          <div className="text-sm text-slate-600">Points will appear after selection is frozen.</div>
+        ) : friendRows.length === 0 ? (
           <div className="text-sm text-slate-600">No points found.</div>
         ) : (
           <div className="grid gap-2">
             {friendRows
               .slice()
               .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
-              .map((r) => {
+              .map((r, idx) => {
                 const isCaptain = friendCaptain && String(r.playerId) === String(friendCaptain);
+                const playerLabel = String(r?.playerId || r?.playerName || 'Unknown player');
+                const playerPoints = typeof r?.totalPoints === 'number' ? r.totalPoints : 0;
                 return (
-                  <div key={r._id} className="flex items-center justify-between">
+                  <div key={r._id || `FRIEND:${playerLabel}:${idx}`} className="flex items-center justify-between">
                     <div className="font-medium text-slate-900">
-                      {r.playerId}
+                      {playerLabel}
                       {isCaptain ? <span className="text-xs text-slate-600"> (Captain)</span> : null}
                     </div>
                     <div className={`font-semibold ${isCaptain ? 'text-slate-900' : 'text-slate-700'}`}>
-                      {r.totalPoints}
+                      {playerPoints}
                     </div>
                   </div>
                 );

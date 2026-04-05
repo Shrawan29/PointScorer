@@ -5,6 +5,9 @@ import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
+import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh.service.js';
+
+const HISTORY_COMPLETION_CHECK_LIMIT = Number(process.env.HISTORY_COMPLETION_CHECK_LIMIT || 5);
 
 const buildSelectionSummary = (selection) => {
   const userPlayers =
@@ -24,6 +27,31 @@ const buildSelectionSummary = (selection) => {
   };
 };
 
+const isIgnorableAutoRefreshError = (error) => {
+  const code = Number(error?.statusCode || error?.response?.status || 0);
+  return code === 400 || code === 404 || code === 409;
+};
+
+const tryAutoRefreshSessionScore = async ({ sessionId, userId, selection }) => {
+  if (!selection?.isFrozen) return null;
+
+  try {
+    return await refreshStatsAndRecalculateForSessionId({
+      sessionId: String(sessionId),
+      userId,
+      force: true,
+    });
+  } catch (error) {
+    if (!isIgnorableAutoRefreshError(error)) {
+      console.error('[History] Auto refresh failed', {
+        sessionId: String(sessionId),
+        message: error?.message,
+      });
+    }
+    return null;
+  }
+};
+
 export const getHistoryByRuleSet = async (req, res, next) => {
   try {
     const { friendId, rulesetId } = req.params;
@@ -33,6 +61,37 @@ export const getHistoryByRuleSet = async (req, res, next) => {
     }
     if (!mongoose.Types.ObjectId.isValid(rulesetId)) {
       return res.status(400).json({ message: 'Invalid rulesetId' });
+    }
+
+    const sessionsToCheck = await MatchSession.find({
+      userId: req.userId,
+      friendId,
+      rulesetId,
+      status: { $in: ['UPCOMING', 'LIVE'] },
+    })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(HISTORY_COMPLETION_CHECK_LIMIT)
+      .select('_id')
+      .lean();
+
+    if (sessionsToCheck.length > 0) {
+      const checkIds = sessionsToCheck.map((s) => s._id);
+      const checkSelections = await PlayerSelection.find({ sessionId: { $in: checkIds } })
+        .select('sessionId isFrozen')
+        .lean();
+      const selectionBySessionId = new Map(
+        checkSelections.map((s) => [String(s.sessionId), s])
+      );
+
+      for (const pendingSession of sessionsToCheck) {
+        const pendingSelection = selectionBySessionId.get(String(pendingSession._id));
+        // eslint-disable-next-line no-await-in-loop
+        await tryAutoRefreshSessionScore({
+          sessionId: pendingSession._id,
+          userId: req.userId,
+          selection: pendingSelection,
+        });
+      }
     }
 
     const sessions = await MatchSession.find({
@@ -80,9 +139,25 @@ export const getMatchResult = async (req, res, next) => {
       return res.status(404).json({ message: 'MatchSession not found' });
     }
 
-    const [breakdowns, selection, matchState, friend] = await Promise.all([
-      PointsBreakdown.find({ sessionId }).lean(),
-      PlayerSelection.findOne({ sessionId }).lean(),
+    const selection = await PlayerSelection.findOne({ sessionId }).lean();
+    const autoRefreshed = await tryAutoRefreshSessionScore({
+      sessionId,
+      userId: req.userId,
+      selection,
+    });
+    const effectiveSession =
+      autoRefreshed?.matchStatus === 'COMPLETED' && session?.status !== 'COMPLETED'
+        ? {
+            ...session,
+            status: 'COMPLETED',
+            playedAt: session?.playedAt || new Date(),
+          }
+        : session;
+
+    const [breakdowns, matchState, friend] = await Promise.all([
+      Array.isArray(autoRefreshed?.playerWisePoints)
+        ? Promise.resolve(autoRefreshed.playerWisePoints)
+        : PointsBreakdown.find({ sessionId }).lean(),
       getCricbuzzMatchStateById(session.realMatchId).catch(() => ({ state: 'UNKNOWN', match: null })),
       Friend.findOne({ _id: session.friendId, userId: req.userId }).lean(),
     ]);
@@ -90,6 +165,11 @@ export const getMatchResult = async (req, res, next) => {
     const normalizeBreakdowns = (rows, sel) => {
       const list = Array.isArray(rows) ? rows : [];
       if (list.length === 0) return [];
+
+      const toPlainRow = (input) => {
+        if (!input || typeof input !== 'object') return input;
+        return typeof input.toObject === 'function' ? input.toObject() : input;
+      };
 
       const userPlayers = Array.isArray(sel?.userPlayers) && sel.userPlayers.length > 0
         ? sel.userPlayers
@@ -108,7 +188,8 @@ export const getMatchResult = async (req, res, next) => {
       };
 
       const byKey = new Map();
-      for (const row of list) {
+      for (const rawRow of list) {
+        const row = toPlainRow(rawRow);
         const playerId = String(row?.playerId || '');
         if (!playerId) continue;
 
@@ -140,27 +221,32 @@ export const getMatchResult = async (req, res, next) => {
       .filter((r) => String(r?.team || 'USER') === 'FRIEND')
       .reduce((sum, row) => sum + (typeof row.totalPoints === 'number' ? row.totalPoints : 0), 0);
     const combinedTotalPoints = userTotalPoints + friendTotalPoints;
+    const effectiveMatchState =
+      String(effectiveSession?.status || '').toUpperCase() === 'COMPLETED' ||
+      autoRefreshed?.matchStatus === 'COMPLETED'
+        ? 'COMPLETED'
+        : matchState?.state || 'UNKNOWN';
 
     return res.status(200).json({
-      match: session,
+      match: effectiveSession,
       friendName: friend?.friendName || null,
       // Legacy + new captains
       captain: selection?.captain || selection?.userCaptain || null,
       userCaptain: selection?.userCaptain || selection?.captain || null,
       friendCaptain: selection?.friendCaptain || null,
-    userPlayers:
-      Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
-        ? selection.userPlayers
-        : Array.isArray(selection?.selectedPlayers)
-          ? selection.selectedPlayers
-          : [],
-    friendPlayers: Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [],
+      userPlayers:
+        Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
+          ? selection.userPlayers
+          : Array.isArray(selection?.selectedPlayers)
+            ? selection.selectedPlayers
+            : [],
+      friendPlayers: Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [],
       selectionFrozen: Boolean(selection?.isFrozen),
-      matchState: matchState?.state || 'UNKNOWN',
-	  playerWisePoints: normalizedBreakdowns,
-		userTotalPoints,
-		friendTotalPoints,
-		totalPoints: combinedTotalPoints,
+      matchState: effectiveMatchState,
+      playerWisePoints: normalizedBreakdowns,
+      userTotalPoints,
+      friendTotalPoints,
+      totalPoints: combinedTotalPoints,
     });
   } catch (error) {
     next(error);

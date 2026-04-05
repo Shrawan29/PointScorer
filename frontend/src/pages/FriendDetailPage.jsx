@@ -7,18 +7,70 @@ import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 import { copyToClipboard } from '../utils/copyToClipboard.js';
 
-const formatPlayerPreview = (players, limit = 4) => {
-  const list = Array.isArray(players) ? players.filter(Boolean) : [];
-  if (list.length === 0) return 'No players saved';
-  if (list.length <= limit) return list.join(', ');
-  return `${list.slice(0, limit).join(', ')} +${list.length - limit} more`;
+const toNumber = (value) => {
+	const n = Number(value);
+	return Number.isFinite(n) ? n : 0;
+};
+
+const getEffectiveStatus = (session) => {
+  const raw = String(session?.status || '').toUpperCase();
+  if (raw === 'COMPLETED' || session?.playedAt) return 'COMPLETED';
+  if (raw === 'LIVE' || raw === 'TODAY') return 'LIVE';
+  if (raw === 'UPCOMING') return 'UPCOMING';
+  return raw || 'UPCOMING';
+};
+
+const getStatusBadgeClass = (status) => {
+  if (status === 'COMPLETED') return 'bg-emerald-100 border-emerald-200 text-emerald-700';
+  if (status === 'LIVE') return 'bg-sky-100 border-sky-200 text-sky-700';
+  if (status === 'UPCOMING') return 'bg-amber-100 border-amber-200 text-amber-700';
+  return 'bg-slate-100 border-slate-200 text-slate-700';
+};
+
+const getMatchScoreSummary = (session, userLabel, friendLabel) => {
+  const userPoints = toNumber(session?.userTotalPoints);
+  const friendPoints = toNumber(session?.friendTotalPoints);
+  const diff = Math.abs(userPoints - friendPoints);
+  const status = getEffectiveStatus(session);
+  const hasAnyScore = userPoints !== 0 || friendPoints !== 0;
+
+  if (!hasAnyScore && status !== 'COMPLETED') {
+    return {
+      userPoints,
+      friendPoints,
+      diff,
+      summary: 'No score yet',
+    };
+  }
+
+  if (userPoints === friendPoints) {
+    return {
+      userPoints,
+      friendPoints,
+      diff,
+      summary: status === 'COMPLETED' ? 'Match tied' : 'Scores level',
+    };
+  }
+
+  const winner = userPoints > friendPoints ? userLabel : friendLabel;
+  return {
+    userPoints,
+    friendPoints,
+    diff,
+    summary:
+      status === 'COMPLETED'
+        ? `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`
+        : `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`,
+  };
 };
 
 export const FriendDetailPage = () => {
   const { friendId } = useParams();
   const location = useLocation();
+  const { user } = useAuth();
 
   const [friend, setFriend] = useState(null);
   const [rulesets, setRulesets] = useState([]);
@@ -32,6 +84,31 @@ export const FriendDetailPage = () => {
   const [friendViewLink, setFriendViewLink] = useState('');
 
   const friendName = useMemo(() => friend?.friendName || friendId, [friend, friendId]);
+  const userDisplayName = useMemo(() => user?.name || user?.email || 'User', [user]);
+  const friendStats = useMemo(() => {
+    const list = Array.isArray(sessions) ? sessions : [];
+    const playedSessions = list.filter(
+      (s) => String(s?.status || '').toUpperCase() === 'COMPLETED' || Boolean(s?.playedAt)
+    );
+    const pointsSource =
+      playedSessions.length > 0 ? playedSessions : list.filter((s) => Boolean(s?.selectionFrozen));
+    const userPoints = pointsSource.reduce((sum, s) => sum + toNumber(s?.userTotalPoints), 0);
+    const friendPoints = pointsSource.reduce((sum, s) => sum + toNumber(s?.friendTotalPoints), 0);
+
+    return {
+      matchesPlayed: playedSessions.length,
+      userPoints,
+      friendPoints,
+      difference: Math.abs(userPoints - friendPoints),
+    };
+  }, [sessions]);
+
+  const leadSummary = useMemo(() => {
+    const diff = Math.abs(friendStats.userPoints - friendStats.friendPoints);
+    if (diff === 0) return 'Scores level';
+    const leader = friendStats.userPoints > friendStats.friendPoints ? userDisplayName : friendName;
+    return `${leader} leading by ${diff} point${diff === 1 ? '' : 's'}`;
+  }, [friendStats.userPoints, friendStats.friendPoints, userDisplayName, friendName]);
 
   useEffect(() => {
     const run = async () => {
@@ -190,6 +267,28 @@ export const FriendDetailPage = () => {
 
         return (
           <div className="grid gap-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Summary</div>
+            <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                <div className="text-[11px] text-slate-500">Matches played</div>
+                <div className="text-sm font-semibold text-slate-900">{friendStats.matchesPlayed}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                <div className="text-[11px] text-slate-500">{friendName} points</div>
+                <div className="text-sm font-semibold text-slate-900">{friendStats.friendPoints}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                <div className="text-[11px] text-slate-500">{userDisplayName} points</div>
+                <div className="text-sm font-semibold text-slate-900">{friendStats.userPoints}</div>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                <div className="text-[11px] text-slate-500">Difference</div>
+                <div className="text-sm font-semibold text-slate-900">{leadSummary}</div>
+              </div>
+            </div>
+          </div>
+
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm text-slate-600">
                 Only frozen selections appear by default.
@@ -210,35 +309,39 @@ export const FriendDetailPage = () => {
               </div>
             ) : (
               <div className="grid gap-2">
-                {frozen.map((s) => (
-                  <div key={s._id} className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-slate-900">{s.realMatchName}</div>
-                      <div className="text-xs text-slate-500">
-                        Status: {s.status}{' '}
-                        {s.playedAt ? `• Played: ${new Date(s.playedAt).toLocaleString()}` : ''}
-                      </div>
-                      <div className="text-xs text-slate-600 mt-1">
-                        My players: {formatPlayerPreview(s.userPlayers)}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        {friendName} players: {formatPlayerPreview(s.friendPlayers)}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link to={`/sessions/${s._id}/result`}>
-                        <Button variant="secondary">Result</Button>
-                      </Link>
-						<Button
-							variant="danger"
-							disabled={deletingId === String(s._id)}
-							onClick={() => onDeleteSession(s)}
-						>
-							{deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
-						</Button>
-                    </div>
+                {frozen.map((s) => {
+            const displayStatus = getEffectiveStatus(s);
+            const scoreSummary = getMatchScoreSummary(s, userDisplayName, friendName);
+            return (
+              <div key={s._id} className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="font-medium text-slate-900">{s.realMatchName}</div>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${getStatusBadgeClass(displayStatus)}`}>
+                      {displayStatus}
+                    </span>
+                    {s.playedAt ? <span>Played: {new Date(s.playedAt).toLocaleString()}</span> : null}
                   </div>
-                ))}
+                  <div className="text-xs text-slate-700 mt-1">
+                    {userDisplayName} points: {scoreSummary.userPoints} • {friendName} points: {scoreSummary.friendPoints} • Diff: {scoreSummary.diff}
+                  </div>
+                  <div className="text-xs text-slate-600">{scoreSummary.summary}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Link to={`/sessions/${s._id}/result`}>
+                    <Button variant="secondary">Result</Button>
+                  </Link>
+                  <Button
+                    variant="danger"
+                    disabled={deletingId === String(s._id)}
+                    onClick={() => onDeleteSession(s)}
+                  >
+                    {deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
               </div>
             )}
 
@@ -250,29 +353,36 @@ export const FriendDetailPage = () => {
 
             {showPending && pending.length > 0 ? (
               <div className="grid gap-2">
-                {pending.map((s) => (
-                  <div key={s._id} className="flex items-center justify-between gap-3 opacity-90">
-                    <div>
-                      <div className="font-medium text-slate-900">{s.realMatchName}</div>
-                      <div className="text-xs text-slate-500">Pending (not frozen)</div>
-                      <div className="text-xs text-slate-600 mt-1">
-                        My players: {formatPlayerPreview(s.userPlayers)}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        {friendName} players: {formatPlayerPreview(s.friendPlayers)}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-						<Button
-							variant="danger"
-							disabled={deletingId === String(s._id)}
-							onClick={() => onDeleteSession(s)}
-						>
-							{deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
-						</Button>
-                    </div>
+                {pending.map((s) => {
+            const displayStatus = getEffectiveStatus(s);
+            const scoreSummary = getMatchScoreSummary(s, userDisplayName, friendName);
+            return (
+              <div key={s._id} className="flex items-center justify-between gap-3 opacity-90">
+                <div>
+                  <div className="font-medium text-slate-900">{s.realMatchName}</div>
+                  <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${getStatusBadgeClass(displayStatus)}`}>
+                      {displayStatus}
+                    </span>
+                    <span>Pending (not frozen)</span>
                   </div>
-                ))}
+                  <div className="text-xs text-slate-700 mt-1">
+                    {userDisplayName} points: {scoreSummary.userPoints} • {friendName} points: {scoreSummary.friendPoints} • Diff: {scoreSummary.diff}
+                  </div>
+                  <div className="text-xs text-slate-600">{scoreSummary.summary}</div>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="danger"
+                    disabled={deletingId === String(s._id)}
+                    onClick={() => onDeleteSession(s)}
+                  >
+                    {deletingId === String(s._id) ? 'Deleting...' : 'Delete'}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
               </div>
             ) : null}
           </div>

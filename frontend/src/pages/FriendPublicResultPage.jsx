@@ -7,6 +7,7 @@ import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
 
 export const FriendPublicResultPage = () => {
 	const { token, sessionId } = useParams();
@@ -32,6 +33,10 @@ export const FriendPublicResultPage = () => {
 	);
 
 	const winnerSummary = useMemo(() => {
+		if (!data?.selectionFrozen) {
+			return 'Selection not frozen yet';
+		}
+
 		const userPoints = toNumber(data?.userTotalPoints);
 		const friendPoints = toNumber(data?.friendTotalPoints);
 		const diff = Math.abs(userPoints - friendPoints);
@@ -46,6 +51,17 @@ export const FriendPublicResultPage = () => {
 			? `${winner} won by ${diff} point${diff === 1 ? '' : 's'}`
 			: `${winner} leading by ${diff} point${diff === 1 ? '' : 's'}`;
 	}, [data]);
+
+	const isCompleted = useMemo(() => {
+		const state = String(data?.matchState || '').toUpperCase();
+		const status = String(data?.match?.status || '').toUpperCase();
+		return state === 'COMPLETED' || status === 'COMPLETED';
+	}, [data]);
+
+	const isUpcoming = useMemo(() => {
+		const state = String(data?.matchState || '').toUpperCase();
+		return state === 'UPCOMING' && !isCompleted;
+	}, [data, isCompleted]);
 
 	useEffect(() => {
 		const run = async () => {
@@ -63,6 +79,28 @@ export const FriendPublicResultPage = () => {
 
 		run();
 	}, [token, sessionId]);
+
+	useEffect(() => {
+		const selectionFrozen = Boolean(data?.selectionFrozen);
+		const shouldAutoRefresh = selectionFrozen && !isCompleted;
+		if (!shouldAutoRefresh) return undefined;
+
+		const timer = setInterval(async () => {
+			if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+			try {
+				const res = await axiosInstance.get(`/api/public/friends/${token}/sessions/${sessionId}/result?t=${Date.now()}`);
+				setData(res.data);
+				const payloadStatus = String(res?.data?.match?.status || '').toUpperCase();
+				if (String(res?.data?.matchState || '').toUpperCase() !== 'UPCOMING' || payloadStatus === 'COMPLETED') {
+					setError('');
+				}
+			} catch {
+				// Ignore transient polling failures; manual refresh remains available.
+			}
+		}, AUTO_REFRESH_INTERVAL_MS);
+
+		return () => clearInterval(timer);
+	}, [data?.selectionFrozen, isCompleted, token, sessionId]);
 
 	const onRefreshRecalculate = async () => {
 		setError('');
@@ -99,6 +137,15 @@ export const FriendPublicResultPage = () => {
 
 				{error && <Alert type="error">{error}</Alert>}
 				{info && <Alert type="success">{info}</Alert>}
+				{!loading && data && !data?.selectionFrozen ? (
+					<Alert type="error">Selection is not frozen yet. Points are available after freeze.</Alert>
+				) : null}
+				{!loading && data?.selectionFrozen && !isCompleted ? (
+					<Alert type="success">Auto-refresh is enabled (every 60 seconds).</Alert>
+				) : null}
+				{!loading && isUpcoming ? (
+					<Alert type="error">Match not started yet</Alert>
+				) : null}
 
 				{loading ? (
 					<div className="text-sm text-slate-600">Loading...</div>
@@ -116,17 +163,19 @@ export const FriendPublicResultPage = () => {
 						</Card>
 
 						<Card title={`${data?.ownerName || 'Owner'} player points`}>
-							{userRows.length === 0 ? (
+							{!data?.selectionFrozen ? (
+								<div className="text-sm text-slate-600">Points will appear after selection is frozen.</div>
+							) : userRows.length === 0 ? (
 								<div className="text-sm text-slate-600">No points found.</div>
 							) : (
 								<div className="grid gap-2">
 									{userRows
 										.slice()
 										.sort((a, b) => toNumber(b?.totalPoints) - toNumber(a?.totalPoints))
-										.map((r) => (
-											<div key={r._id || `${r.team}:${r.playerId}`} className="flex items-center justify-between text-sm">
-												<div className="font-medium text-slate-900">{r.playerId}</div>
-												<div className="font-semibold text-slate-700">{toNumber(r.totalPoints)}</div>
+										.map((r, idx) => (
+											<div key={r._id || `${r.team || 'USER'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between text-sm">
+												<div className="font-medium text-slate-900">{String(r?.playerId || r?.playerName || 'Unknown player')}</div>
+												<div className="font-semibold text-slate-700">{typeof r?.totalPoints === 'number' ? r.totalPoints : 0}</div>
 											</div>
 										))}
 								</div>
@@ -134,17 +183,19 @@ export const FriendPublicResultPage = () => {
 						</Card>
 
 						<Card title={`${data?.friendName || 'Friend'} player points`}>
-							{friendRows.length === 0 ? (
+							{!data?.selectionFrozen ? (
+								<div className="text-sm text-slate-600">Points will appear after selection is frozen.</div>
+							) : friendRows.length === 0 ? (
 								<div className="text-sm text-slate-600">No points found.</div>
 							) : (
 								<div className="grid gap-2">
 									{friendRows
 										.slice()
 										.sort((a, b) => toNumber(b?.totalPoints) - toNumber(a?.totalPoints))
-										.map((r) => (
-											<div key={r._id || `${r.team}:${r.playerId}`} className="flex items-center justify-between text-sm">
-												<div className="font-medium text-slate-900">{r.playerId}</div>
-												<div className="font-semibold text-slate-700">{toNumber(r.totalPoints)}</div>
+										.map((r, idx) => (
+											<div key={r._id || `${r.team || 'FRIEND'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between text-sm">
+												<div className="font-medium text-slate-900">{String(r?.playerId || r?.playerName || 'Unknown player')}</div>
+												<div className="font-semibold text-slate-700">{typeof r?.totalPoints === 'number' ? r.totalPoints : 0}</div>
 											</div>
 										))}
 								</div>

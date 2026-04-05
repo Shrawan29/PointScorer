@@ -11,6 +11,45 @@ import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
+const isTruthyQueryFlag = (value) => {
+	const normalized = String(value || '').trim().toLowerCase();
+	return normalized === '1' || normalized === 'true' || normalized === 'yes';
+};
+
+const shouldIncludePointsDebug = (req) => {
+	if (!isTruthyQueryFlag(req?.query?.pointsDebug)) return false;
+	const isProduction = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+	const allowInProd = String(process.env.ALLOW_POINTS_DEBUG_IN_PROD || '').toLowerCase() === 'true';
+	return !isProduction || allowInProd;
+};
+
+const buildEmptySessionPoints = (includePointsDebug = false) => {
+	const base = {
+		userTotalPoints: 0,
+		friendTotalPoints: 0,
+		pointsDifference: 0,
+	};
+
+	if (!includePointsDebug) return base;
+
+	return {
+		...base,
+		pointsDebug: {
+			enabled: true,
+			rawUserTotalPoints: 0,
+			rawFriendTotalPoints: 0,
+			rawTotalPoints: 0,
+			recheckedUserTotalPoints: 0,
+			recheckedFriendTotalPoints: 0,
+			recheckedTotalPoints: 0,
+			deltaUserPoints: 0,
+			deltaFriendPoints: 0,
+			deltaTotalPoints: 0,
+			hadMismatch: false,
+		},
+	};
+};
+
 const buildSelectionSummary = (selection) => {
 	const userPlayers =
 		Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
@@ -29,6 +68,74 @@ const buildSelectionSummary = (selection) => {
 	};
 };
 
+const buildSessionPointsMap = async ({ sessionIds, selectionBySessionId, includePointsDebug = false }) => {
+	if (!Array.isArray(sessionIds) || sessionIds.length === 0) return new Map();
+
+	const rows = await PointsBreakdown.find({ sessionId: { $in: sessionIds } })
+		.select('sessionId playerId totalPoints team createdAt updatedAt')
+		.lean();
+
+	const rowsBySessionId = new Map();
+	for (const row of rows) {
+		const sid = String(row?.sessionId || '');
+		if (!sid) continue;
+		const bucket = rowsBySessionId.get(sid) || [];
+		bucket.push(row);
+		rowsBySessionId.set(sid, bucket);
+	}
+
+	const pointsBySessionId = new Map();
+	for (const sessionId of sessionIds) {
+		const sid = String(sessionId || '');
+		if (!sid) continue;
+		const sessionRows = rowsBySessionId.get(sid) || [];
+		const selection = selectionBySessionId?.get(sid) || null;
+		const normalizedRows = normalizeBreakdowns(sessionRows, selection);
+		const rawUserTotalPoints = sessionRows
+			.filter((r) => String(r?.team || 'USER').toUpperCase() !== 'FRIEND')
+			.reduce((sum, row) => sum + toNumber(row?.totalPoints), 0);
+		const rawFriendTotalPoints = sessionRows
+			.filter((r) => String(r?.team || 'USER').toUpperCase() === 'FRIEND')
+			.reduce((sum, row) => sum + toNumber(row?.totalPoints), 0);
+		const userTotalPoints = normalizedRows
+			.filter((r) => String(r?.team || 'USER') === 'USER')
+			.reduce((sum, row) => sum + toNumber(row?.totalPoints), 0);
+		const friendTotalPoints = normalizedRows
+			.filter((r) => String(r?.team || 'USER') === 'FRIEND')
+			.reduce((sum, row) => sum + toNumber(row?.totalPoints), 0);
+		const rawTotalPoints = rawUserTotalPoints + rawFriendTotalPoints;
+		const recheckedTotalPoints = userTotalPoints + friendTotalPoints;
+		const hadMismatch =
+			rawUserTotalPoints !== userTotalPoints || rawFriendTotalPoints !== friendTotalPoints;
+
+		const totals = {
+			userTotalPoints,
+			friendTotalPoints,
+			pointsDifference: Math.abs(userTotalPoints - friendTotalPoints),
+		};
+
+		if (includePointsDebug) {
+			totals.pointsDebug = {
+				enabled: true,
+				rawUserTotalPoints,
+				rawFriendTotalPoints,
+				rawTotalPoints,
+				recheckedUserTotalPoints: userTotalPoints,
+				recheckedFriendTotalPoints: friendTotalPoints,
+				recheckedTotalPoints,
+				deltaUserPoints: userTotalPoints - rawUserTotalPoints,
+				deltaFriendPoints: friendTotalPoints - rawFriendTotalPoints,
+				deltaTotalPoints: recheckedTotalPoints - rawTotalPoints,
+				hadMismatch,
+			};
+		}
+
+		pointsBySessionId.set(sid, totals);
+	}
+
+	return pointsBySessionId;
+};
+
 const resolveFriendFromToken = async (token) => {
 	const safeToken = String(token || '').trim();
 	if (!safeToken) return null;
@@ -40,9 +147,79 @@ const findSessionForFriend = async ({ friendId, sessionId }) => {
 	return MatchSession.findOne({ _id: sessionId, friendId }).lean();
 };
 
+const isIgnorablePublicRefreshError = (error) => {
+	const code = Number(error?.statusCode || error?.response?.status || 0);
+	return code === 400 || code === 404 || code === 409;
+};
+
+const tryAutoRefreshPublicSessionScore = async ({ sessionId, userId, selection }) => {
+	if (!selection?.isFrozen && !selection?.selectionFrozen) return null;
+
+	try {
+		return await refreshStatsAndRecalculateForSessionId({
+			sessionId: String(sessionId),
+			userId,
+			force: true,
+		});
+	} catch (error) {
+		if (!isIgnorablePublicRefreshError(error)) {
+			console.error('[Public] Auto refresh failed', {
+				sessionId: String(sessionId),
+				message: error?.message,
+			});
+		}
+		return null;
+	}
+};
+
+const PUBLIC_HISTORY_STATUS_REFRESH_LIMIT = Number(process.env.PUBLIC_HISTORY_STATUS_REFRESH_LIMIT || 25);
+
+const autoRefreshPublicHistoryStatuses = async ({ sessions, selectionBySessionId }) => {
+	if (!Array.isArray(sessions) || sessions.length === 0) return false;
+
+	let changed = false;
+	const markCompletedIds = sessions
+		.filter((s) => Boolean(s?.playedAt) && String(s?.status || '').toUpperCase() !== 'COMPLETED')
+		.map((s) => s._id);
+
+	if (markCompletedIds.length > 0) {
+		await MatchSession.updateMany(
+			{ _id: { $in: markCompletedIds } },
+			{ $set: { status: 'COMPLETED' } },
+		);
+		changed = true;
+	}
+
+	const refreshCandidates = sessions
+		.filter((s) => {
+			if (String(s?.status || '').toUpperCase() === 'COMPLETED') return false;
+			const summary = selectionBySessionId.get(String(s?._id));
+			return Boolean(summary?.selectionFrozen);
+		})
+		.slice(0, PUBLIC_HISTORY_STATUS_REFRESH_LIMIT);
+
+	for (const candidate of refreshCandidates) {
+		const summary = selectionBySessionId.get(String(candidate?._id));
+		// eslint-disable-next-line no-await-in-loop
+		const out = await tryAutoRefreshPublicSessionScore({
+			sessionId: candidate?._id,
+			userId: candidate?.userId,
+			selection: summary,
+		});
+		if (String(out?.matchStatus || '').toUpperCase() === 'COMPLETED') changed = true;
+	}
+
+	return changed;
+};
+
 const normalizeBreakdowns = (rows, selection) => {
 	const list = Array.isArray(rows) ? rows : [];
 	if (list.length === 0) return [];
+
+	const toPlainRow = (input) => {
+		if (!input || typeof input !== 'object') return input;
+		return typeof input.toObject === 'function' ? input.toObject() : input;
+	};
 
 	const userPlayers =
 		Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
@@ -62,7 +239,8 @@ const normalizeBreakdowns = (rows, selection) => {
 	};
 
 	const byKey = new Map();
-	for (const row of list) {
+	for (const rawRow of list) {
+		const row = toPlainRow(rawRow);
 		const playerId = String(row?.playerId || '');
 		if (!playerId) continue;
 
@@ -83,22 +261,52 @@ const normalizeBreakdowns = (rows, selection) => {
 export const getFriendPublicView = async (req, res, next) => {
 	try {
 		const { token } = req.params;
+		const includePointsDebug = shouldIncludePointsDebug(req);
 		const friend = await resolveFriendFromToken(token);
 		if (!friend) {
 			return res.status(404).json({ message: 'Invalid or expired friend link' });
 		}
 
-		const sessions = await MatchSession.find({ friendId: friend._id })
+		const owner = await User.findById(friend.userId)
+			.select('name email')
+			.lean();
+		const ownerName = owner?.name || owner?.email || 'Owner';
+
+		let sessions = await MatchSession.find({ friendId: friend._id })
 			.sort({ createdAt: -1 })
 			.lean();
 
-		const sessionIds = sessions.map((s) => s._id);
-		const selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
+		let sessionIds = sessions.map((s) => s._id);
+		let selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
 			.select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
 			.lean();
-		const selectionBySessionId = new Map(
+		let selectionBySessionId = new Map(
 			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
 		);
+
+		const completionUpdated = await autoRefreshPublicHistoryStatuses({
+			sessions,
+			selectionBySessionId,
+		});
+
+		if (completionUpdated) {
+			sessions = await MatchSession.find({ friendId: friend._id })
+				.sort({ createdAt: -1 })
+				.lean();
+			sessionIds = sessions.map((s) => s._id);
+			selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
+				.select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
+				.lean();
+			selectionBySessionId = new Map(
+				selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
+			);
+		}
+
+		const pointsBySessionId = await buildSessionPointsMap({
+			sessionIds,
+			selectionBySessionId,
+			includePointsDebug,
+		});
 
 		const visibleSessions = sessions
 			.map((s) => ({
@@ -109,6 +317,7 @@ export const getFriendPublicView = async (req, res, next) => {
 				playedAt: s.playedAt,
 				createdAt: s.createdAt,
 				...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
+				...(pointsBySessionId.get(String(s._id)) || buildEmptySessionPoints(includePointsDebug)),
 			}))
 			.filter((s) => s.selectionFrozen);
 
@@ -117,6 +326,7 @@ export const getFriendPublicView = async (req, res, next) => {
 				friendId: String(friend._id),
 				friendName: friend.friendName,
 			},
+			ownerName,
 			sessions: visibleSessions,
 		});
 	} catch (error) {
@@ -137,9 +347,25 @@ export const getFriendPublicMatchResult = async (req, res, next) => {
 			return res.status(404).json({ message: 'MatchSession not found' });
 		}
 
-		const [selection, breakdowns, owner, matchState] = await Promise.all([
-			PlayerSelection.findOne({ sessionId }).lean(),
-			PointsBreakdown.find({ sessionId }).lean(),
+		const selection = await PlayerSelection.findOne({ sessionId }).lean();
+		const autoRefreshed = await tryAutoRefreshPublicSessionScore({
+			sessionId,
+			userId: session.userId,
+			selection,
+		});
+		const effectiveSession =
+			autoRefreshed?.matchStatus === 'COMPLETED' && session?.status !== 'COMPLETED'
+				? {
+					...session,
+					status: 'COMPLETED',
+					playedAt: session?.playedAt || new Date(),
+				}
+				: session;
+
+		const [breakdowns, owner, matchState] = await Promise.all([
+			Array.isArray(autoRefreshed?.playerWisePoints)
+				? Promise.resolve(autoRefreshed.playerWisePoints)
+				: PointsBreakdown.find({ sessionId }).lean(),
 			User.findById(session.userId).lean(),
 			getCricbuzzMatchStateById(session.realMatchId).catch(() => ({ state: 'UNKNOWN', match: null })),
 		]);
@@ -151,9 +377,14 @@ export const getFriendPublicMatchResult = async (req, res, next) => {
 		const friendTotalPoints = normalizedBreakdowns
 			.filter((r) => String(r?.team || 'USER') === 'FRIEND')
 			.reduce((sum, row) => sum + toNumber(row?.totalPoints), 0);
+		const effectiveMatchState =
+			String(effectiveSession?.status || '').toUpperCase() === 'COMPLETED' ||
+			autoRefreshed?.matchStatus === 'COMPLETED'
+				? 'COMPLETED'
+				: matchState?.state || 'UNKNOWN';
 
 		return res.status(200).json({
-			match: session,
+			match: effectiveSession,
 			friendName: friend.friendName,
 			ownerName: owner?.name || owner?.email || 'Owner',
 			captain: selection?.captain || selection?.userCaptain || null,
@@ -167,7 +398,7 @@ export const getFriendPublicMatchResult = async (req, res, next) => {
 						: [],
 			friendPlayers: Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [],
 			selectionFrozen: Boolean(selection?.isFrozen),
-			matchState: matchState?.state || 'UNKNOWN',
+			matchState: effectiveMatchState,
 			playerWisePoints: normalizedBreakdowns,
 			userTotalPoints,
 			friendTotalPoints,

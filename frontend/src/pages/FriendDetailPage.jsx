@@ -9,6 +9,13 @@ import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 import { copyToClipboard } from '../utils/copyToClipboard.js';
 
+const formatPlayerPreview = (players, limit = 4) => {
+  const list = Array.isArray(players) ? players.filter(Boolean) : [];
+  if (list.length === 0) return 'No players saved';
+  if (list.length <= limit) return list.join(', ');
+  return `${list.slice(0, limit).join(', ')} +${list.length - limit} more`;
+};
+
 export const FriendDetailPage = () => {
   const { friendId } = useParams();
   const location = useLocation();
@@ -22,20 +29,23 @@ export const FriendDetailPage = () => {
   const [loading, setLoading] = useState(false);
 	const [deletingId, setDeletingId] = useState('');
 	const [copyingLink, setCopyingLink] = useState(false);
+  const [friendViewLink, setFriendViewLink] = useState('');
 
   const friendName = useMemo(() => friend?.friendName || friendId, [friend, friendId]);
 
   useEffect(() => {
     const run = async () => {
       setError('');
+      setFriendViewLink('');
       setLoading(true);
       try {
-        const [friendsRes, rulesetsRes, sessionsRes] = await Promise.all([
+        const [friendsRes, rulesetsRes, sessionsRes, shareRes] = await Promise.all([
           axiosInstance.get('/api/friends'),
           axiosInstance.get(`/api/rulesets/friend/${friendId}`),
 			// Fetch all so we can optionally show pending sessions; UI still hides pending by default.
 			// Add a small cache buster to avoid stale data when navigating back after freezing.
           axiosInstance.get(`/api/matches/friend/${friendId}?onlyFrozen=false&_ts=${Date.now()}`),
+			axiosInstance.get(`/api/share/friend-view/${friendId}`).catch(() => null),
         ]);
 
         const friends = friendsRes.data || [];
@@ -43,6 +53,7 @@ export const FriendDetailPage = () => {
         setRulesets(rulesetsRes.data || []);
 			const rawSessions = sessionsRes.data || [];
 			setSessions(rawSessions);
+			setFriendViewLink(shareRes?.data?.url || '');
       } catch (err) {
         setError(err?.response?.data?.message || 'Failed to load friend details');
       } finally {
@@ -77,8 +88,19 @@ export const FriendDetailPage = () => {
     setInfo('');
     setCopyingLink(true);
     try {
-      const res = await axiosInstance.get(`/api/share/friend-view/${friendId}`);
-      const url = res?.data?.url || '';
+      let url = friendViewLink;
+      if (!url) {
+        const res = await axiosInstance.get(`/api/share/friend-view/${friendId}`);
+        url = res?.data?.url || '';
+        if (url) {
+          setFriendViewLink(url);
+          // iOS Safari can require a strict user gesture for clipboard writes.
+          // Fetch the link first, then copy on the next tap without awaiting network.
+          setInfo('Link is ready. Tap copy again.');
+          return;
+        }
+      }
+
       if (!url) {
         setError('Unable to generate friend view link');
         return;
@@ -86,7 +108,19 @@ export const FriendDetailPage = () => {
 
       const copied = await copyToClipboard(url);
       if (!copied) {
-        setError('Copy failed for friend view link');
+        if (navigator?.share) {
+          try {
+            await navigator.share({
+              title: `${friendName} match history`,
+              url,
+            });
+            setInfo('Opened share sheet. Choose Copy or Messages/WhatsApp.');
+            return;
+          } catch {
+            // Ignore cancelled share and fall through to error.
+          }
+        }
+        setError('Copy failed for friend view link. Long-press this link to copy: ' + url);
         return;
       }
 
@@ -184,6 +218,12 @@ export const FriendDetailPage = () => {
                         Status: {s.status}{' '}
                         {s.playedAt ? `• Played: ${new Date(s.playedAt).toLocaleString()}` : ''}
                       </div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        My players: {formatPlayerPreview(s.userPlayers)}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {friendName} players: {formatPlayerPreview(s.friendPlayers)}
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Link to={`/sessions/${s._id}/result`}>
@@ -215,6 +255,12 @@ export const FriendDetailPage = () => {
                     <div>
                       <div className="font-medium text-slate-900">{s.realMatchName}</div>
                       <div className="text-xs text-slate-500">Pending (not frozen)</div>
+                      <div className="text-xs text-slate-600 mt-1">
+                        My players: {formatPlayerPreview(s.userPlayers)}
+                      </div>
+                      <div className="text-xs text-slate-600">
+                        {friendName} players: {formatPlayerPreview(s.friendPlayers)}
+                      </div>
                     </div>
                     <div className="flex gap-2">
 						<Button

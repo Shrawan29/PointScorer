@@ -45,6 +45,24 @@ const sanitizeMatch = (match, bucket) => {
 	};
 };
 
+const buildSelectionSummary = (selection) => {
+	const userPlayers =
+		Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
+			? selection.userPlayers
+			: Array.isArray(selection?.selectedPlayers)
+				? selection.selectedPlayers
+				: [];
+	const friendPlayers = Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [];
+
+	return {
+		selectionFrozen: Boolean(selection?.isFrozen),
+		userPlayers,
+		friendPlayers,
+		userCaptain: selection?.userCaptain || selection?.captain || null,
+		friendCaptain: selection?.friendCaptain || null,
+	};
+};
+
 export const getMatches = async (req, res, next) => {
 	try {
 		const [todayAndLive, upcoming] = await Promise.all([
@@ -172,13 +190,15 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 
 		const sessionIds = sessions.map((s) => s._id);
 		const selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
-			.select('sessionId isFrozen')
+			.select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
 			.lean();
-		const frozenBySessionId = new Map(selections.map((s) => [String(s.sessionId), Boolean(s.isFrozen)]));
+		const selectionBySessionId = new Map(
+			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
+		);
 
 		const enriched = sessions.map((s) => ({
 			...s,
-			selectionFrozen: frozenBySessionId.get(String(s._id)) || false,
+			...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
 		}));
 
 		return res.status(200).json(onlyFrozen ? enriched.filter((s) => s.selectionFrozen) : enriched);
@@ -201,12 +221,14 @@ export const getMatchSessionsByRuleSet = async (req, res, next) => {
 
 		const sessionIds = sessions.map((s) => s._id);
 		const selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
-			.select('sessionId isFrozen')
+			.select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
 			.lean();
-		const frozenBySessionId = new Map(selections.map((s) => [String(s.sessionId), Boolean(s.isFrozen)]));
+		const selectionBySessionId = new Map(
+			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
+		);
 		const enriched = sessions.map((s) => ({
 			...s,
-			selectionFrozen: frozenBySessionId.get(String(s._id)) || false,
+			...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
 		}));
 
 		return res.status(200).json(onlyFrozen ? enriched.filter((s) => s.selectionFrozen) : enriched);

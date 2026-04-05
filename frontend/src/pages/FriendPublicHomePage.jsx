@@ -6,6 +6,13 @@ import Alert from '../components/Alert.jsx';
 import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 
+const formatPlayerPreview = (players, limit = 4) => {
+	const list = Array.isArray(players) ? players.filter(Boolean) : [];
+	if (list.length === 0) return 'No players saved';
+	if (list.length <= limit) return list.join(', ');
+	return `${list.slice(0, limit).join(', ')} +${list.length - limit} more`;
+};
+
 export const FriendPublicHomePage = () => {
 	const { token } = useParams();
 
@@ -14,6 +21,7 @@ export const FriendPublicHomePage = () => {
 	const [loading, setLoading] = useState(false);
 
 	const sessions = useMemo(() => (Array.isArray(data?.sessions) ? data.sessions : []), [data]);
+	const friendName = useMemo(() => data?.friend?.friendName || 'Friend', [data]);
 
 	useEffect(() => {
 		const run = async () => {
@@ -59,6 +67,12 @@ export const FriendPublicHomePage = () => {
 											<div className="text-xs text-slate-500">
 												Status: {s.status}
 												{s.playedAt ? ` • Played: ${new Date(s.playedAt).toLocaleString()}` : ''}
+											</div>
+											<div className="text-xs text-slate-600 mt-1">
+												Owner players: {formatPlayerPreview(s.userPlayers)}
+											</div>
+											<div className="text-xs text-slate-600">
+												{friendName} players: {formatPlayerPreview(s.friendPlayers)}
 											</div>
 										</div>
 										<div className="flex gap-2">

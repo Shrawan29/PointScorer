@@ -250,11 +250,16 @@ export const getUpcomingMatches = async (req, res, next) => {
 export const getSquads = async (req, res, next) => {
 	try {
 		const { matchId } = req.params;
+		const team1Name = typeof req?.query?.team1Name === 'string' ? req.query.team1Name : null;
+		const team2Name = typeof req?.query?.team2Name === 'string' ? req.query.team2Name : null;
 		if (!matchId) {
 			return res.status(400).json({ message: 'matchId is required' });
 		}
 
-		const data = await scrapeMatchSquadsAndPlayingXI(matchId);
+		const data = await scrapeMatchSquadsAndPlayingXI(matchId, {
+			team1Name,
+			team2Name,
+		});
 		if (!data) {
 			return res.status(502).json({ message: 'Failed to fetch match squads' });
 		}

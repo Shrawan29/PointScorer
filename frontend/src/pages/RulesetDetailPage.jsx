@@ -9,6 +9,13 @@ import FormField from '../components/FormField.jsx';
 import Layout from '../components/Layout.jsx';
 import PageHeader from '../components/PageHeader.jsx';
 
+const formatPlayerPreview = (players, limit = 4) => {
+  const list = Array.isArray(players) ? players.filter(Boolean) : [];
+  if (list.length === 0) return 'No players saved';
+  if (list.length <= limit) return list.join(', ');
+  return `${list.slice(0, limit).join(', ')} +${list.length - limit} more`;
+};
+
 export const RulesetDetailPage = () => {
   const { friendId, rulesetId } = useParams();
 
@@ -104,6 +111,12 @@ export const RulesetDetailPage = () => {
                     <div className="font-medium text-slate-900">{s.realMatchName}</div>
                     <div className="text-xs text-slate-500">
                       Played: {s.playedAt ? new Date(s.playedAt).toLocaleString() : 'N/A'}
+                    </div>
+                    <div className="text-xs text-slate-600 mt-1">
+                      My players: {formatPlayerPreview(s.userPlayers)}
+                    </div>
+                    <div className="text-xs text-slate-600">
+                      Friend players: {formatPlayerPreview(s.friendPlayers)}
                     </div>
                   </div>
                   <Link to={`/sessions/${s._id}/result`}>

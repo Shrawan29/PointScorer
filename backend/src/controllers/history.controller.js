@@ -6,6 +6,24 @@ import PlayerSelection from '../models/PlayerSelection.model.js';
 import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
 
+const buildSelectionSummary = (selection) => {
+  const userPlayers =
+    Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
+      ? selection.userPlayers
+      : Array.isArray(selection?.selectedPlayers)
+        ? selection.selectedPlayers
+        : [];
+  const friendPlayers = Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [];
+
+  return {
+    selectionFrozen: Boolean(selection?.isFrozen),
+    userPlayers,
+    friendPlayers,
+    userCaptain: selection?.userCaptain || selection?.captain || null,
+    friendCaptain: selection?.friendCaptain || null,
+  };
+};
+
 export const getHistoryByRuleSet = async (req, res, next) => {
   try {
     const { friendId, rulesetId } = req.params;
@@ -26,7 +44,24 @@ export const getHistoryByRuleSet = async (req, res, next) => {
       .sort({ playedAt: -1 })
       .lean();
 
-    return res.status(200).json(sessions);
+    if (!sessions || sessions.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const sessionIds = sessions.map((s) => s._id);
+    const selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
+      .select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
+      .lean();
+    const selectionBySessionId = new Map(
+      selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
+    );
+
+    const enriched = sessions.map((s) => ({
+      ...s,
+      ...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
+    }));
+
+    return res.status(200).json(enriched);
   } catch (error) {
     next(error);
   }

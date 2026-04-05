@@ -11,6 +11,24 @@ import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
+const buildSelectionSummary = (selection) => {
+	const userPlayers =
+		Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
+			? selection.userPlayers
+			: Array.isArray(selection?.selectedPlayers)
+				? selection.selectedPlayers
+				: [];
+	const friendPlayers = Array.isArray(selection?.friendPlayers) ? selection.friendPlayers : [];
+
+	return {
+		selectionFrozen: Boolean(selection?.isFrozen),
+		userPlayers,
+		friendPlayers,
+		userCaptain: selection?.userCaptain || selection?.captain || null,
+		friendCaptain: selection?.friendCaptain || null,
+	};
+};
+
 const resolveFriendFromToken = async (token) => {
 	const safeToken = String(token || '').trim();
 	if (!safeToken) return null;
@@ -76,9 +94,11 @@ export const getFriendPublicView = async (req, res, next) => {
 
 		const sessionIds = sessions.map((s) => s._id);
 		const selections = await PlayerSelection.find({ sessionId: { $in: sessionIds } })
-			.select('sessionId isFrozen')
+			.select('sessionId isFrozen userPlayers friendPlayers selectedPlayers userCaptain friendCaptain captain')
 			.lean();
-		const frozenBySessionId = new Map(selections.map((s) => [String(s.sessionId), Boolean(s.isFrozen)]));
+		const selectionBySessionId = new Map(
+			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
+		);
 
 		const visibleSessions = sessions
 			.map((s) => ({
@@ -88,7 +108,7 @@ export const getFriendPublicView = async (req, res, next) => {
 				status: s.status,
 				playedAt: s.playedAt,
 				createdAt: s.createdAt,
-				selectionFrozen: frozenBySessionId.get(String(s._id)) || false,
+				...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
 			}))
 			.filter((s) => s.selectionFrozen);
 

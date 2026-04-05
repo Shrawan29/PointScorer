@@ -267,7 +267,12 @@ export const PlayerSelectionPage = () => {
     const realMatchId = loadedSession?.realMatchId;
     if (realMatchId) {
       try {
-        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${realMatchId}/squads`);
+        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${realMatchId}/squads`, {
+          params: {
+            team1Name: loadedSession?.team1 || undefined,
+            team2Name: loadedSession?.team2 || undefined,
+          },
+        });
         setSquads(squadsRes.data || null);
       } catch {
         setSquads(null);

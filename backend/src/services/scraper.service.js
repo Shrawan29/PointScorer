@@ -199,6 +199,9 @@ const sanitizePlayerName = (value) => {
 	const raw = normalizeWhitespace(value);
 	if (!raw) return '';
 
+	const roleSuffixRe =
+		/(?:wk\s*[-/]?\s*batter|wicket\s*[-/]?\s*keeper(?:\s*[-/]?\s*batter)?|batting\s*all\s*[-/]?\s*rounder|bowling\s*all\s*[-/]?\s*rounder|all\s*[-/]?\s*rounder|batter|bowler)$/i;
+
 	const cleaned = raw
 		.replace(/^[\d\s.)\-•*]+/, '')
 		.replace(/[\u2020†*]/g, '')
@@ -207,6 +210,9 @@ const sanitizePlayerName = (value) => {
 		.replace(/\((?:[^)]*\b(?:coaches?|physio|physiotherapist|trainer|analyst|manager|mentor|support\s*staff|team\s*doctor|masseur|selector|consultant|director|scout)\b[^)]*)\)/gi, '')
 		.replace(/\s*[-:]\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
 		.replace(/,\s*(?:captain|vice\s*captain|wicket\s*-?\s*keeper)\b.*$/i, '')
+		// Some squad pages glue role to the player name (e.g. "Sanju SamsonWK-Batter").
+		.replace(/([a-z])((?:wk|WK|Wk)\s*[-/]?\s*batter|wicket\s*[-/]?\s*keeper(?:\s*[-/]?\s*batter)?|batting\s*all\s*[-/]?\s*rounder|bowling\s*all\s*[-/]?\s*rounder|all\s*[-/]?\s*rounder|batter|bowler)$/i, '$1 $2')
+		.replace(new RegExp(`\\s*${roleSuffixRe.source}`, 'i'), '')
 		.replace(/[,:;]+$/g, '')
 		.replace(/\s+/g, ' ')
 		.trim();
@@ -248,6 +254,32 @@ const uniquePlayers = (arr) => {
 	}
 
 	return out;
+};
+
+const SUPPORT_STAFF_GROUP_RE = /\b(support\s*staff|coaches?|assistant\s+coach(?:es)?|head\s+coach(?:es)?|bowling\s+coach(?:es)?|batting\s+coach(?:es)?|fielding\s+coach(?:es)?|mentor|manager|team\s+manager|physio|physiotherapist|trainer|analyst|staff|team\s+doctor|masseur|consultant|director|scout|advisor|strategic\s+advisor)\b/i;
+
+const isSupportStaffGroupLabel = (value) => SUPPORT_STAFF_GROUP_RE.test(normalizeWhitespace(value));
+
+const isSupportStaffRole = (value) => STAFF_ROLE_RE.test(normalizeWhitespace(value));
+
+const isLikelyCompletedMatch = (matchLike) => {
+	const status = normalizeWhitespace(matchLike?.matchStatus).toLowerCase();
+	const text = normalizeWhitespace(`${matchLike?.rawText || ''} ${matchLike?.matchName || ''}`).toLowerCase();
+	const hay = `${status} ${text}`;
+
+	if (/\b(upcoming|preview|scheduled|match\s+starts|starts\s+in|yet\s+to\s+begin|to\s+begin|not\s+started)\b/.test(hay)) {
+		return false;
+	}
+
+	if (/\b(live|in\s*progress|toss|stumps?|innings|opt\s+to\s+bat)\b/.test(hay)) {
+		return false;
+	}
+
+	if (/\b(completed?|result|won\s+by|beat\s+by|no\s+result|abandoned?|tied|drawn|match\s+over)\b/.test(hay)) {
+		return true;
+	}
+
+	return false;
 };
 
 const splitPlayersList = (value) => {
@@ -401,11 +433,61 @@ export const scrapeCricbuzzScorecardPlayerStats = async (matchId) => {
 		};
 
 		const playerNameById = {};
-		const rememberName = (playerId, name) => {
+		const rememberName = (playerId, name, options = {}) => {
 			const pid = String(playerId || '').trim();
 			const nm = normalizeWhitespace(name);
 			if (!pid || !nm) return;
-			if (!playerNameById[pid]) playerNameById[pid] = nm;
+			if (!playerNameById[pid] || options?.force === true) playerNameById[pid] = nm;
+		};
+
+		const playerTeamById = {};
+		const toTeamInfo = (teamLike) => {
+			if (!teamLike || typeof teamLike !== 'object') return null;
+
+			const teamId = toInt(
+				teamLike?.batTeamId ||
+				teamLike?.bowlTeamId ||
+				teamLike?.teamId ||
+				teamLike?.id,
+			);
+			const teamName = normalizeWhitespace(
+				teamLike?.batTeamName ||
+				teamLike?.bowlTeamName ||
+				teamLike?.teamName ||
+				teamLike?.name ||
+				'',
+			);
+			const teamShortName = normalizeWhitespace(
+				teamLike?.batTeamShortName ||
+				teamLike?.bowlTeamShortName ||
+				teamLike?.batTeamSName ||
+				teamLike?.bowlTeamSName ||
+				teamLike?.shortName ||
+				'',
+			);
+
+			if (!teamId && !teamName && !teamShortName) return null;
+			return {
+				teamId: teamId || null,
+				teamName: teamName || null,
+				teamShortName: teamShortName || null,
+			};
+		};
+
+		const rememberTeam = (playerId, teamInfo) => {
+			const pid = String(playerId || '').trim();
+			if (!pid || !teamInfo) return;
+			if (!playerTeamById[pid]) {
+				playerTeamById[pid] = teamInfo;
+				return;
+			}
+
+			const prev = playerTeamById[pid];
+			playerTeamById[pid] = {
+				teamId: prev?.teamId || teamInfo?.teamId || null,
+				teamName: prev?.teamName || teamInfo?.teamName || null,
+				teamShortName: prev?.teamShortName || teamInfo?.teamShortName || null,
+			};
 		};
 
 		// Best-effort: traverse scorecardApiData to find any (id,name) pairs.
@@ -470,27 +552,41 @@ export const scrapeCricbuzzScorecardPlayerStats = async (matchId) => {
 		const isRunoutCode = (code) => String(code || '').toUpperCase().includes('RUNOUT');
 
 		for (const innings of scorecardApiData.scoreCard) {
+			const batTeamInfo = toTeamInfo(innings?.batTeamDetails);
+			const bowlTeamInfo = toTeamInfo(innings?.bowlTeamDetails);
+
 			const batsmenData = innings?.batTeamDetails?.batsmenData || {};
 			for (const b of Object.values(batsmenData)) {
 				if (!b || !b.batId) continue;
-				rememberName(b.batId, b.batName || b.batShortName);
+				rememberName(b.batId, b.batName || b.batShortName, { force: true });
+				rememberTeam(b.batId, batTeamInfo);
 				bump(b.batId, { runs: b.runs, fours: b.fours, sixes: b.sixes });
 
 				const wicketCode = b.wicketCode;
 				const f1 = toInt(b.fielderId1);
 				const f2 = toInt(b.fielderId2);
 				if (isCatchCode(wicketCode)) {
-					if (f1 > 0) bump(f1, { catches: 1 });
+					if (f1 > 0) {
+						bump(f1, { catches: 1 });
+						rememberTeam(f1, bowlTeamInfo);
+					}
 				} else if (isRunoutCode(wicketCode)) {
-					if (f1 > 0) bump(f1, { runouts: 1 });
-					if (f2 > 0 && f2 !== f1) bump(f2, { runouts: 1 });
+					if (f1 > 0) {
+						bump(f1, { runouts: 1 });
+						rememberTeam(f1, bowlTeamInfo);
+					}
+					if (f2 > 0 && f2 !== f1) {
+						bump(f2, { runouts: 1 });
+						rememberTeam(f2, bowlTeamInfo);
+					}
 				}
 			}
 
 			const bowlersData = innings?.bowlTeamDetails?.bowlersData || {};
 			for (const bw of Object.values(bowlersData)) {
 				if (!bw || !bw.bowlerId) continue;
-				rememberName(bw.bowlerId, bw.bowlerName || bw.bowlName || bw.bowlerShortName);
+				rememberName(bw.bowlerId, bw.bowlerName || bw.bowlName || bw.bowlerShortName, { force: true });
+				rememberTeam(bw.bowlerId, bowlTeamInfo);
 				bump(bw.bowlerId, { wickets: bw.wickets });
 			}
 		}
@@ -513,6 +609,7 @@ export const scrapeCricbuzzScorecardPlayerStats = async (matchId) => {
 			sourceUrl,
 			playerStatsById,
 			playerNameById,
+			playerTeamById,
 			matchHeader: scorecardApiData?.matchHeader || null,
 		};
 
@@ -533,13 +630,73 @@ const tryFetchFirstWorking = async (candidates, label) => {
 	return { url: null, html: null };
 };
 
+const extractFlightStringsFromHtml = (rawHtml) => {
+	const s = String(rawHtml || '');
+	const re = /self\.__next_f\.push\(\[\s*(\d+)\s*,\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]\)\s*;?/g;
+	const out = [];
+	for (const m of s.matchAll(re)) {
+		const raw = m[2];
+		let decoded;
+		try {
+			decoded = JSON.parse(`"${raw}"`);
+		} catch {
+			decoded = raw;
+		}
+		out.push(decoded);
+	}
+	return out;
+};
+
+const sliceBalancedJsonFromText = (text, startIndex) => {
+	const s = String(text || '');
+	let i = startIndex;
+	while (i < s.length && s[i] !== '{' && s[i] !== '[') i += 1;
+	if (i >= s.length) return null;
+
+	const open = s[i];
+	const close = open === '{' ? '}' : ']';
+	let depth = 0;
+	let inString = false;
+	let esc = false;
+
+	for (let j = i; j < s.length; j += 1) {
+		const ch = s[j];
+		if (inString) {
+			if (esc) {
+				esc = false;
+				continue;
+			}
+			if (ch === '\\') {
+				esc = true;
+				continue;
+			}
+			if (ch === '"') inString = false;
+			continue;
+		}
+
+		if (ch === '"') {
+			inString = true;
+			continue;
+		}
+
+		if (ch === open) depth += 1;
+		if (ch === close) depth -= 1;
+		if (depth === 0) return s.slice(i, j + 1);
+	}
+
+	return null;
+};
+
 const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = {}) => {
 	if (!matchUrl) return null;
 	await delay(SCRAPER_DELAY_MS);
+	const preferSquadOnly = options?.preferSquadOnly === true;
 
 	const teamsFromUrl = extractTeamsFromMatchUrlSlug(matchUrl);
 	const team1Name = normalizeWhitespace(options?.team1Name || teamsFromUrl?.team1 || '') || null;
 	const team2Name = normalizeWhitespace(options?.team2Name || teamsFromUrl?.team2 || '') || null;
+	let resolvedTeam1Label = team1Name;
+	let resolvedTeam2Label = team2Name;
 
 	const matchId = extractMatchIdFromUrl(matchUrl);
 	const base = String(matchUrl);
@@ -583,6 +740,427 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 	if (!html) return null;
 
 	const $ = cheerio.load(html);
+
+	// Prefer structured team/player data from Next.js flight payload when available.
+	const parsePairedTeamBundlesFromFlight = () => {
+		const chunks = extractFlightStringsFromHtml(html);
+		const marker1 = '"team1":';
+		const marker2 = '"team2":';
+		const objectMarker = '{"team1":';
+
+		const TEAM_CODE_ALIASES_LITE = {
+			csk: ['chennai super kings'],
+			pbks: ['punjab kings', 'kings xi punjab'],
+			kkr: ['kolkata knight riders'],
+			srh: ['sunrisers hyderabad'],
+			mi: ['mumbai indians'],
+			rcb: ['royal challengers bengaluru', 'royal challengers bangalore'],
+			dc: ['delhi capitals'],
+			rr: ['rajasthan royals'],
+			lsg: ['lucknow super giants'],
+			gt: ['gujarat titans'],
+			ind: ['india'],
+			aus: ['australia'],
+			nz: ['new zealand'],
+			eng: ['england'],
+			sa: ['south africa'],
+			wi: ['west indies'],
+			afg: ['afghanistan'],
+			pak: ['pakistan'],
+			sl: ['sri lanka'],
+			ban: ['bangladesh'],
+		};
+
+		const normalizeLite = (value) =>
+			String(value || '')
+				.toLowerCase()
+				.replace(/[^a-z0-9\s]/g, ' ')
+				.replace(/\s+/g, ' ')
+				.trim();
+
+		const getAliasVariants = (value) => {
+			const raw = normalizeLite(value);
+			if (!raw) return [];
+
+			const out = new Set([raw]);
+			const tokens = raw.split(' ').filter(Boolean);
+			if (tokens.length > 1) {
+				out.add(tokens.join(''));
+				const initials = tokens.map((t) => t[0]).join('');
+				if (initials.length >= 2) out.add(initials);
+			}
+
+			const compact = raw.replace(/\s+/g, '');
+			const mapped = TEAM_CODE_ALIASES_LITE[compact];
+			if (Array.isArray(mapped)) {
+				for (const alias of mapped) {
+					const normalized = normalizeLite(alias);
+					if (!normalized) continue;
+					out.add(normalized);
+					const aliasTokens = normalized.split(' ').filter(Boolean);
+					if (aliasTokens.length > 1) {
+						out.add(aliasTokens.join(''));
+						const initials = aliasTokens.map((t) => t[0]).join('');
+						if (initials.length >= 2) out.add(initials);
+					}
+				}
+			}
+
+			return [...out].filter(Boolean);
+		};
+
+		const scoreLite = (expected, actual) => {
+			const expectedVariants = getAliasVariants(expected);
+			const actualVariants = getAliasVariants(actual);
+			if (expectedVariants.length === 0 || actualVariants.length === 0) return 0;
+
+			let best = 0;
+			for (const e of expectedVariants) {
+				for (const a of actualVariants) {
+					if (!e || !a) continue;
+					if (e === a) {
+						best = Math.max(best, 100);
+						continue;
+					}
+					if (e.includes(a) || a.includes(e)) {
+						best = Math.max(best, 72);
+						continue;
+					}
+
+					const eTokens = e.split(' ').filter(Boolean);
+					const aTokens = new Set(a.split(' ').filter(Boolean));
+					let overlap = 0;
+					for (const tk of eTokens) {
+						if (aTokens.has(tk)) overlap += 1;
+					}
+					if (overlap >= 1) best = Math.max(best, 56);
+				}
+			}
+
+			return best;
+		};
+
+		const isBundle = (parsed) =>
+			Boolean(
+				parsed &&
+				typeof parsed === 'object' &&
+				parsed.team &&
+				parsed.players &&
+				typeof parsed.players === 'object',
+			);
+
+		const countPlayers = (bundle) =>
+			Object.values(bundle?.players || {}).reduce(
+				(sum, group) => sum + (Array.isArray(group) ? group.length : 0),
+				0,
+			);
+
+		const hasPlayingXI = (bundle) =>
+			Object.entries(bundle?.players || {}).some(
+				([label, group]) => /playing\s*xi/i.test(String(label || '')) && Array.isArray(group) && group.length >= 8,
+			);
+
+		const addCandidate = (rawTeam1, rawTeam2, candidates) => {
+			if (!isBundle(rawTeam1) || !isBundle(rawTeam2)) return;
+
+			const t1Name = rawTeam1?.team?.teamName || rawTeam1?.team?.teamSName || '';
+			const t2Name = rawTeam2?.team?.teamName || rawTeam2?.team?.teamSName || '';
+			const normalScore = scoreLite(team1Name, t1Name) + scoreLite(team2Name, t2Name);
+			const swappedScore = scoreLite(team1Name, t2Name) + scoreLite(team2Name, t1Name);
+			const isSwapped = swappedScore > normalScore;
+
+			const team1Bundle = isSwapped ? rawTeam2 : rawTeam1;
+			const team2Bundle = isSwapped ? rawTeam1 : rawTeam2;
+			const score = Math.max(normalScore, swappedScore);
+			const playerCount = countPlayers(team1Bundle) + countPlayers(team2Bundle);
+			const xiCount = (hasPlayingXI(team1Bundle) ? 1 : 0) + (hasPlayingXI(team2Bundle) ? 1 : 0);
+
+			candidates.push({
+				team1Bundle,
+				team2Bundle,
+				score,
+				playerCount,
+				xiCount,
+			});
+		};
+
+		const candidates = [];
+		for (const str of chunks) {
+			const text = String(str || '');
+
+			let objectFrom = 0;
+			while (objectFrom < text.length) {
+				const idx = text.indexOf(objectMarker, objectFrom);
+				if (idx === -1) break;
+
+				const objectJson = sliceBalancedJsonFromText(text, idx);
+				if (!objectJson) {
+					objectFrom = idx + objectMarker.length;
+					continue;
+				}
+
+				try {
+					const parsed = JSON.parse(objectJson);
+					addCandidate(parsed?.team1, parsed?.team2, candidates);
+				} catch {
+					// ignore malformed candidate
+				}
+
+				objectFrom = idx + objectMarker.length;
+			}
+
+			let searchFrom = 0;
+			while (searchFrom < text.length) {
+				const idx1 = text.indexOf(marker1, searchFrom);
+				if (idx1 === -1) break;
+
+				const idx2 = text.indexOf(marker2, idx1 + marker1.length);
+				if (idx2 === -1) {
+					searchFrom = idx1 + marker1.length;
+					continue;
+				}
+
+				const team1Json = sliceBalancedJsonFromText(text, idx1 + marker1.length);
+				const team2Json = sliceBalancedJsonFromText(text, idx2 + marker2.length);
+				if (!team1Json || !team2Json) {
+					searchFrom = idx2 + marker2.length;
+					continue;
+				}
+
+				try {
+					const t1 = JSON.parse(team1Json);
+					const t2 = JSON.parse(team2Json);
+					if (!isBundle(t1) || !isBundle(t2)) {
+						searchFrom = idx2 + marker2.length;
+						continue;
+					}
+
+					addCandidate(t1, t2, candidates);
+				} catch {
+					// ignore malformed candidate
+				}
+
+				searchFrom = idx2 + marker2.length;
+			}
+		}
+
+		if (candidates.length === 0) return { team1Bundle: null, team2Bundle: null };
+
+		candidates.sort((a, b) => {
+			if (b.score !== a.score) return b.score - a.score;
+			if (b.xiCount !== a.xiCount) return b.xiCount - a.xiCount;
+			return b.playerCount - a.playerCount;
+		});
+
+		return {
+			team1Bundle: candidates[0].team1Bundle,
+			team2Bundle: candidates[0].team2Bundle,
+		};
+	};
+
+	const { team1Bundle, team2Bundle } = parsePairedTeamBundlesFromFlight();
+	if (team1Bundle && team2Bundle) {
+		const team1Id = Number(team1Bundle?.team?.teamId || 0);
+		const team2Id = Number(team2Bundle?.team?.teamId || 0);
+		const team1Title = normalizeWhitespace(team1Bundle?.team?.teamName || team1Bundle?.team?.teamSName || team1Name || '') || '';
+		const team2Title = normalizeWhitespace(team2Bundle?.team?.teamName || team2Bundle?.team?.teamSName || team2Name || '') || '';
+
+		const sideByMeta = (player, fallbackSide) => {
+			const pid = Number(player?.teamId || player?.team?.teamId || 0);
+			if (pid && team1Id && pid === team1Id) return 'team1';
+			if (pid && team2Id && pid === team2Id) return 'team2';
+
+			const pTeamName = normalizeWhitespace(
+				player?.teamName ||
+				player?.teamSName ||
+				player?.team?.teamName ||
+				player?.team?.teamSName ||
+				'',
+			);
+			if (pTeamName) {
+				const s1 = scoreTeamText(team1Title, pTeamName);
+				const s2 = scoreTeamText(team2Title, pTeamName);
+				if (s1 >= 55 && s1 >= s2 + 5) return 'team1';
+				if (s2 >= 55 && s2 >= s1 + 5) return 'team2';
+			}
+
+			return fallbackSide;
+		};
+
+		const extractName = (player) => player?.name || player?.fullName || player?.nickName || '';
+		const pushPlayer = (sides, side, player) => {
+			const name = extractName(player);
+			if (!name) return;
+			if (side === 'team1') sides.team1.push(name);
+			if (side === 'team2') sides.team2.push(name);
+		};
+
+		const sides = {
+			squad: { team1: [], team2: [] },
+			xi: { team1: [], team2: [] },
+		};
+
+		const collectFromBundle = (bundle, fallbackSide) => {
+			for (const [groupName, group] of Object.entries(bundle?.players || {})) {
+				if (isSupportStaffGroupLabel(groupName)) continue;
+				const list = Array.isArray(group) ? group : [];
+				const isXIGroup = /playing\s*xi/i.test(String(groupName || ''));
+				for (const player of list) {
+					if (isSupportStaffRole(player?.role || player?.designation || player?.title || '')) continue;
+					const side = sideByMeta(player, fallbackSide);
+					pushPlayer(sides.squad, side, player);
+					if (isXIGroup) pushPlayer(sides.xi, side, player);
+				}
+			}
+		};
+
+		collectFromBundle(team1Bundle, 'team1');
+		collectFromBundle(team2Bundle, 'team2');
+
+		let team1Squad = uniquePlayers(sides.squad.team1);
+		let team2Squad = uniquePlayers(sides.squad.team2);
+		let team1XI = uniquePlayers(sides.xi.team1);
+		let team2XI = uniquePlayers(sides.xi.team2);
+
+		if (team1Squad.length === 0 || team2Squad.length === 0) {
+			const extractAllPlayers = (playersObj) =>
+				uniquePlayers(
+					Object.entries(playersObj || {}).flatMap(([groupName, group]) => {
+						if (isSupportStaffGroupLabel(groupName)) return [];
+						return (Array.isArray(group) ? group : [])
+							.filter((player) => !isSupportStaffRole(player?.role || player?.designation || player?.title || ''))
+							.map(extractName);
+					}),
+				);
+
+			if (team1Squad.length === 0) team1Squad = extractAllPlayers(team1Bundle?.players);
+			if (team2Squad.length === 0) team2Squad = extractAllPlayers(team2Bundle?.players);
+		}
+
+		if (team1XI.length === 0 || team2XI.length === 0) {
+			const extractGroupPlayers = (group) =>
+				uniquePlayers(
+					(Array.isArray(group) ? group : []).map(extractName),
+				);
+
+			if (team1XI.length === 0) {
+				team1XI = extractGroupPlayers(
+					team1Bundle?.players?.['playing XI'] ||
+					team1Bundle?.players?.playingXI ||
+					team1Bundle?.players?.['Playing XI'] ||
+					[],
+				);
+			}
+			if (team2XI.length === 0) {
+				team2XI = extractGroupPlayers(
+					team2Bundle?.players?.['playing XI'] ||
+					team2Bundle?.players?.playingXI ||
+					team2Bundle?.players?.['Playing XI'] ||
+					[],
+				);
+			}
+		}
+
+		let isPlayingXIDeclared = preferSquadOnly ? false : (team1XI.length >= 8 && team2XI.length >= 8);
+
+		// For completed matches, prefer scorecard-derived participants so IPL Impact Player
+		// substitutions are reflected (often 12 players involved for a side).
+		if (!preferSquadOnly && matchId) {
+			const scorecard = await scrapeCricbuzzScorecardPlayerStats(matchId).catch(() => null);
+			const scorecardNames = scorecard?.playerNameById && typeof scorecard.playerNameById === 'object'
+				? scorecard.playerNameById
+				: {};
+			const scorecardTeams = scorecard?.playerTeamById && typeof scorecard.playerTeamById === 'object'
+				? scorecard.playerTeamById
+				: {};
+
+			const headerTeam1Id = Number(scorecard?.matchHeader?.team1?.id || 0);
+			const headerTeam2Id = Number(scorecard?.matchHeader?.team2?.id || 0);
+
+			const normalizeLite = (value) =>
+				normalizeWhitespace(value)
+					.toLowerCase()
+					.replace(/[^a-z0-9\s]/g, ' ')
+					.replace(/\s+/g, ' ')
+					.trim();
+
+			const matchesAny = (target, candidates) =>
+				candidates.some((c) => c && (target === c || target.includes(c) || c.includes(target)));
+
+			const team1Refs = uniqueStrings([
+				team1Title,
+				team1Name,
+				team1Bundle?.team?.teamSName,
+				team1Bundle?.team?.teamName,
+			]).map(normalizeLite).filter(Boolean);
+			const team2Refs = uniqueStrings([
+				team2Title,
+				team2Name,
+				team2Bundle?.team?.teamSName,
+				team2Bundle?.team?.teamName,
+			]).map(normalizeLite).filter(Boolean);
+
+			const resolveScorecardSide = (teamInfo) => {
+				if (!teamInfo || typeof teamInfo !== 'object') return null;
+
+				const teamId = Number(teamInfo?.teamId || 0);
+				if (teamId && headerTeam1Id && teamId === headerTeam1Id) return 'team1';
+				if (teamId && headerTeam2Id && teamId === headerTeam2Id) return 'team2';
+
+				const teamText = normalizeLite(`${teamInfo?.teamName || ''} ${teamInfo?.teamShortName || ''}`);
+				if (!teamText) return null;
+
+				const isTeam1 = matchesAny(teamText, team1Refs);
+				const isTeam2 = matchesAny(teamText, team2Refs);
+				if (isTeam1 && !isTeam2) return 'team1';
+				if (isTeam2 && !isTeam1) return 'team2';
+				return null;
+			};
+
+			const scorecardTeam1Players = uniquePlayers(
+				Object.entries(scorecardNames)
+					.filter(([pid]) => resolveScorecardSide(scorecardTeams?.[pid]) === 'team1')
+					.map(([, rawName]) => rawName),
+			);
+			const scorecardTeam2Players = uniquePlayers(
+				Object.entries(scorecardNames)
+					.filter(([pid]) => resolveScorecardSide(scorecardTeams?.[pid]) === 'team2')
+					.map(([, rawName]) => rawName),
+			);
+
+			if (scorecardTeam1Players.length >= 11 && scorecardTeam2Players.length >= 11) {
+				team1XI = scorecardTeam1Players;
+				team2XI = scorecardTeam2Players;
+				team1Squad = uniquePlayers([...team1Squad, ...scorecardTeam1Players]);
+				team2Squad = uniquePlayers([...team2Squad, ...scorecardTeam2Players]);
+				isPlayingXIDeclared = true;
+			}
+		}
+
+		const players = uniquePlayers([...team1Squad, ...team2Squad]);
+		const playingXI = uniquePlayers([...team1XI, ...team2XI]);
+
+		return {
+			matchId: matchId || null,
+			matchUrl,
+			sourceUrl: fetchedUrl,
+			teamNames: {
+				team1: normalizeWhitespace(team1Bundle?.team?.teamName || team1Bundle?.team?.teamSName || '') || team1Name || null,
+				team2: normalizeWhitespace(team2Bundle?.team?.teamName || team2Bundle?.team?.teamSName || '') || team2Name || null,
+			},
+			squad: {
+				team1: team1Squad,
+				team2: team2Squad,
+			},
+			playingXIByTeam: {
+				team1: team1XI,
+				team2: team2XI,
+			},
+			players,
+			playingXI,
+			isPlayingXIDeclared,
+		};
+	}
 
 	// Attempt 1: parse explicit "Playing XI" blocks in visible text
 	const textBlobs = uniqueStrings(
@@ -715,6 +1293,128 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 		if (/\b(squad|playing\s*xi|lineup|players?)\b/i.test(text)) score += 12;
 		return score;
 	};
+
+	let scorecardSideByPlayerKey = new Map();
+	let scorecardOwnedTeam1Players = [];
+	let scorecardOwnedTeam2Players = [];
+	if (matchId) {
+		const scorecard = await scrapeCricbuzzScorecardPlayerStats(matchId).catch(() => null);
+		const scorecardNames = scorecard?.playerNameById && typeof scorecard.playerNameById === 'object'
+			? scorecard.playerNameById
+			: {};
+		const scorecardTeams = scorecard?.playerTeamById && typeof scorecard.playerTeamById === 'object'
+			? scorecard.playerTeamById
+			: {};
+
+		const matchHeader = scorecard?.matchHeader || {};
+		const headerTeam1 = matchHeader?.team1 || {};
+		const headerTeam2 = matchHeader?.team2 || {};
+		const headerTeam1Id = Number(headerTeam1?.id || 0);
+		const headerTeam2Id = Number(headerTeam2?.id || 0);
+
+		const team1Candidates = uniqueStrings([
+			team1Name,
+			headerTeam1?.name,
+			headerTeam1?.shortName,
+		]);
+		const team2Candidates = uniqueStrings([
+			team2Name,
+			headerTeam2?.name,
+			headerTeam2?.shortName,
+		]);
+
+		const scoreLocalSideForHeaderTeam = (headerTeam) => {
+			const headerText = uniqueStrings([headerTeam?.name, headerTeam?.shortName]).join(' ');
+			if (!headerText) return null;
+
+			let s1 = 0;
+			for (const candidate of team1Candidates) {
+				s1 = Math.max(s1, scoreTeamText(candidate, headerText));
+			}
+
+			let s2 = 0;
+			for (const candidate of team2Candidates) {
+				s2 = Math.max(s2, scoreTeamText(candidate, headerText));
+			}
+
+			if (s1 >= 55 && s1 >= s2 + 5) return 'team1';
+			if (s2 >= 55 && s2 >= s1 + 5) return 'team2';
+			return null;
+		};
+
+		let headerTeam1LocalSide = scoreLocalSideForHeaderTeam(headerTeam1);
+		let headerTeam2LocalSide = scoreLocalSideForHeaderTeam(headerTeam2);
+
+		if (!headerTeam1LocalSide && headerTeam2LocalSide) {
+			headerTeam1LocalSide = headerTeam2LocalSide === 'team1' ? 'team2' : 'team1';
+		}
+		if (!headerTeam2LocalSide && headerTeam1LocalSide) {
+			headerTeam2LocalSide = headerTeam1LocalSide === 'team1' ? 'team2' : 'team1';
+		}
+
+		if (!headerTeam1LocalSide) headerTeam1LocalSide = 'team1';
+		if (!headerTeam2LocalSide) headerTeam2LocalSide = headerTeam1LocalSide === 'team1' ? 'team2' : 'team1';
+
+		const headerTeam1Label = normalizeWhitespace(headerTeam1?.name || headerTeam1?.shortName || '') || null;
+		const headerTeam2Label = normalizeWhitespace(headerTeam2?.name || headerTeam2?.shortName || '') || null;
+		if (headerTeam1Label) {
+			if (headerTeam1LocalSide === 'team1') resolvedTeam1Label = headerTeam1Label;
+			if (headerTeam1LocalSide === 'team2') resolvedTeam2Label = headerTeam1Label;
+		}
+		if (headerTeam2Label) {
+			if (headerTeam2LocalSide === 'team1') resolvedTeam1Label = headerTeam2Label;
+			if (headerTeam2LocalSide === 'team2') resolvedTeam2Label = headerTeam2Label;
+		}
+
+		const resolveScorecardSide = (teamInfo) => {
+			if (!teamInfo || typeof teamInfo !== 'object') return null;
+
+			const teamId = Number(teamInfo?.teamId || 0);
+			if (teamId && headerTeam1Id && teamId === headerTeam1Id) return headerTeam1LocalSide;
+			if (teamId && headerTeam2Id && teamId === headerTeam2Id) return headerTeam2LocalSide;
+
+			const teamText = uniqueStrings([teamInfo?.teamName, teamInfo?.teamShortName]).join(' ');
+			if (!teamText) return null;
+
+			let s1 = 0;
+			for (const candidate of team1Candidates) {
+				s1 = Math.max(s1, scoreTeamText(candidate, teamText));
+			}
+
+			let s2 = 0;
+			for (const candidate of team2Candidates) {
+				s2 = Math.max(s2, scoreTeamText(candidate, teamText));
+			}
+
+			if (s1 >= 55 && s1 >= s2 + 5) return 'team1';
+			if (s2 >= 55 && s2 >= s1 + 5) return 'team2';
+			return null;
+		};
+
+		const mapped = new Map();
+		for (const [pid, rawName] of Object.entries(scorecardNames)) {
+			const side = resolveScorecardSide(scorecardTeams?.[pid]);
+			if (!side) continue;
+
+			const key = normalizePlayerKey(rawName);
+			if (!key) continue;
+			mapped.set(key, side);
+		}
+
+		scorecardSideByPlayerKey = mapped;
+		scorecardOwnedTeam1Players = uniquePlayers(
+			Object.entries(scorecardNames)
+				.filter(([pid]) => resolveScorecardSide(scorecardTeams?.[pid]) === 'team1')
+				.map(([, rawName]) => rawName),
+		);
+		scorecardOwnedTeam2Players = uniquePlayers(
+			Object.entries(scorecardNames)
+				.filter(([pid]) => resolveScorecardSide(scorecardTeams?.[pid]) === 'team2')
+				.map(([, rawName]) => rawName),
+		);
+	}
+
+	const getScorecardSide = (playerName) => scorecardSideByPlayerKey.get(normalizePlayerKey(playerName)) || null;
 
 	const isTeamText = (teamName, text) => scoreTeamText(teamName, text) >= 55;
 
@@ -900,6 +1600,42 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 		...collectTeamPlayersFromText(team2Name, 'squad'),
 	]);
 
+	const hasStrongScorecardTeams =
+		scorecardOwnedTeam1Players.length >= 8 && scorecardOwnedTeam2Players.length >= 8;
+
+	if (!preferSquadOnly && hasStrongScorecardTeams) {
+		team1SquadPlayers = scorecardOwnedTeam1Players;
+		team2SquadPlayers = scorecardOwnedTeam2Players;
+	}
+
+	const scorecardTeam1Players = uniquePlayers(allPlayers.filter((p) => getScorecardSide(p) === 'team1'));
+	const scorecardTeam2Players = uniquePlayers(allPlayers.filter((p) => getScorecardSide(p) === 'team2'));
+	const hasScorecardSplit = scorecardTeam1Players.length > 0 && scorecardTeam2Players.length > 0;
+
+	if (!preferSquadOnly && hasScorecardSplit) {
+		const team1Misassigned = team1SquadPlayers.filter((p) => getScorecardSide(p) === 'team2').length;
+		const team2Misassigned = team2SquadPlayers.filter((p) => getScorecardSide(p) === 'team1').length;
+
+		if (
+			team1SquadPlayers.length === 0 ||
+			team2SquadPlayers.length === 0 ||
+			team1Misassigned > 0 ||
+			team2Misassigned > 0
+		) {
+			team1SquadPlayers = scorecardTeam1Players;
+			team2SquadPlayers = scorecardTeam2Players;
+		} else {
+			team1SquadPlayers = uniquePlayers([
+				...team1SquadPlayers.filter((p) => getScorecardSide(p) !== 'team2'),
+				...scorecardTeam1Players,
+			]);
+			team2SquadPlayers = uniquePlayers([
+				...team2SquadPlayers.filter((p) => getScorecardSide(p) !== 'team1'),
+				...scorecardTeam2Players,
+			]);
+		}
+	}
+
 	if (team1SquadPlayers.length === 0 && team2SquadPlayers.length === 0 && allPlayers.length >= 2) {
 		const mid = Math.ceil(allPlayers.length / 2);
 		team1SquadPlayers = uniquePlayers(allPlayers.slice(0, mid));
@@ -916,16 +1652,44 @@ const scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl = async (matchUrl, options = 
 		...team2SquadPlayers.filter((p) => playingXIKeys.has(normalizePlayerKey(p))),
 	]);
 
+	if (!preferSquadOnly && hasStrongScorecardTeams) {
+		team1XIPlayers = scorecardOwnedTeam1Players;
+		team2XIPlayers = scorecardOwnedTeam2Players;
+		isPlayingXIDeclared = true;
+	}
+
+	const scorecardTeam1XIPlayers = uniquePlayers(allPlayingXI.filter((p) => getScorecardSide(p) === 'team1'));
+	const scorecardTeam2XIPlayers = uniquePlayers(allPlayingXI.filter((p) => getScorecardSide(p) === 'team2'));
+	if (!preferSquadOnly && scorecardTeam1XIPlayers.length > 0 && scorecardTeam2XIPlayers.length > 0) {
+		team1XIPlayers = uniquePlayers([
+			...team1XIPlayers.filter((p) => getScorecardSide(p) !== 'team2'),
+			...scorecardTeam1XIPlayers,
+		]);
+		team2XIPlayers = uniquePlayers([
+			...team2XIPlayers.filter((p) => getScorecardSide(p) !== 'team1'),
+			...scorecardTeam2XIPlayers,
+		]);
+		isPlayingXIDeclared = true;
+	}
+
 	if (team1XIPlayers.length === 0 && team2XIPlayers.length === 0 && allPlayingXI.length >= 2) {
 		const xiMid = Math.ceil(allPlayingXI.length / 2);
 		team1XIPlayers = uniquePlayers(allPlayingXI.slice(0, xiMid));
 		team2XIPlayers = uniquePlayers(allPlayingXI.slice(xiMid));
 	}
 
+	if (preferSquadOnly) {
+		isPlayingXIDeclared = false;
+	}
+
 	return {
 		matchId: matchId || null,
 		matchUrl,
 		sourceUrl: fetchedUrl,
+		teamNames: {
+			team1: resolvedTeam1Label || null,
+			team2: resolvedTeam2Label || null,
+		},
 		squad: {
 			team1: team1SquadPlayers,
 			team2: team2SquadPlayers,
@@ -1876,9 +2640,12 @@ export const scrapeUpcomingMatches = async () => {
 	}
 };
 
-export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
+export const scrapeMatchSquadsAndPlayingXI = async (matchId, options = {}) => {
 	const id = String(matchId || '').trim();
 	if (!id) return null;
+
+	const preferredTeam1Name = normalizeWhitespace(options?.team1Name || '') || null;
+	const preferredTeam2Name = normalizeWhitespace(options?.team2Name || '') || null;
 
 	const cached = squadsCache.get(id);
 	if (cached && Date.now() - cached.ts < SQUADS_CACHE_TTL_MS) {
@@ -1893,19 +2660,79 @@ export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
 		squadsCache.delete(id);
 	}
 
-	// Find the match URL from our cached lists
-	const [todayLive, upcoming] = await Promise.all([scrapeTodayAndLiveMatches(), scrapeUpcomingMatches()]);
-	const list = [...(todayLive || []), ...(upcoming || [])];
-	const match = list.find((m) => String(m?.matchUrl || '').includes(`/${id}/`)) || null;
-	if (!match?.matchUrl) return null;
-	const teamsFromUrl = extractTeamsFromMatchUrlSlug(match.matchUrl);
-	const resolvedTeam1Name = normalizeWhitespace(match.team1 || teamsFromUrl?.team1 || '') || null;
-	const resolvedTeam2Name = normalizeWhitespace(match.team2 || teamsFromUrl?.team2 || '') || null;
+	// Prefer IPL recent results metadata for historical IPL IDs to keep team order stable,
+	// then fall back to live/today and upcoming lists.
+	const [todayLive, upcoming, iplRecent] = await Promise.all([
+		scrapeTodayAndLiveMatches(),
+		scrapeUpcomingMatches(),
+		scrapeLatestIplEditionMatchesPlayedSoFar(),
+	]);
 
-	const data = await scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl(match.matchUrl, {
-		team1Name: resolvedTeam1Name,
-		team2Name: resolvedTeam2Name,
-	});
+	const findById = (arr) =>
+		(Array.isArray(arr) ? arr : []).find((m) => String(m?.matchUrl || '').includes(`/${id}/`)) || null;
+
+	let match =
+		findById(iplRecent) ||
+		findById(todayLive) ||
+		findById(upcoming) ||
+		null;
+
+	if (!match?.matchUrl) {
+		const scorecard = await scrapeCricbuzzScorecardPlayerStats(id).catch(() => null);
+		const header = scorecard?.matchHeader || {};
+		const stateText = normalizeWhitespace(
+			`${header?.state || ''} ${header?.status || ''} ${header?.statusText || ''} ${header?.stateTitle || ''}`,
+		).toLowerCase();
+		const headerLooksCompleted = /\b(complete|completed|result|won\s+by|beat\s+by|no\s+result|abandoned?|tied|match\s+over|stumps?)\b/.test(stateText);
+
+		if (headerLooksCompleted) {
+			match = {
+				matchId: id,
+				matchUrl: `https://www.cricbuzz.com/live-cricket-scores/${id}/`,
+				team1: normalizeWhitespace(header?.team1?.name || header?.team1?.shortName || preferredTeam1Name || ''),
+				team2: normalizeWhitespace(header?.team2?.name || header?.team2?.shortName || preferredTeam2Name || ''),
+				matchStatus: 'COMPLETED',
+				rawText: stateText,
+			};
+		}
+	}
+
+	const preferSquadOnly = options?.preferSquadOnly === true
+		? true
+		: !isLikelyCompletedMatch(match);
+
+	let data = null;
+	let resolvedMatchUrl = null;
+	let resolvedTeam1Name = null;
+	let resolvedTeam2Name = null;
+
+	const candidateMatchUrls = uniqueStrings([
+		match?.matchUrl,
+		`https://www.cricbuzz.com/live-cricket-scores/${id}/`,
+		`https://www.cricbuzz.com/cricket-scores/${id}/`,
+	]);
+
+	for (const candidateUrl of candidateMatchUrls) {
+		const teamsFromUrl = extractTeamsFromMatchUrlSlug(candidateUrl);
+		const team1Name = normalizeWhitespace(preferredTeam1Name || match?.team1 || teamsFromUrl?.team1 || '') || null;
+		const team2Name = normalizeWhitespace(preferredTeam2Name || match?.team2 || teamsFromUrl?.team2 || '') || null;
+
+		// eslint-disable-next-line no-await-in-loop
+		const out = await scrapeCricbuzzSquadsAndPlayingXIFromMatchUrl(candidateUrl, {
+			team1Name,
+			team2Name,
+			preferSquadOnly,
+		});
+
+		if (out) {
+			data = out;
+			resolvedMatchUrl = candidateUrl;
+			resolvedTeam1Name = normalizeWhitespace(out?.teamNames?.team1 || team1Name || '') || null;
+			resolvedTeam2Name = normalizeWhitespace(out?.teamNames?.team2 || team2Name || '') || null;
+			break;
+		}
+	}
+
 	if (!data) return null;
 
 	const team1Squad = uniquePlayers(data?.squad?.team1 || []);
@@ -1917,8 +2744,8 @@ export const scrapeMatchSquadsAndPlayingXI = async (matchId) => {
 
 	const normalized = {
 		matchId: id,
-		matchUrl: match.matchUrl,
-		matchName: match.matchName || null,
+		matchUrl: match?.matchUrl || resolvedMatchUrl || null,
+		matchName: match?.matchName || null,
 		team1: {
 			name: resolvedTeam1Name,
 			squad: team1Squad,

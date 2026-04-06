@@ -94,13 +94,13 @@ const clampPlayers = (arr) => uniquePlayers(arr).slice(0, 9);
 
 // ── Role badge chip ────────────────────────────────────────────────────────────
 const ROLE_COLORS = {
-  'WK-Batter':         'bg-violet-100 text-violet-700',
-  'Batting Allrounder':'bg-emerald-100 text-emerald-700',
-  'Bowling Allrounder':'bg-sky-100 text-sky-700',
-  'Allrounder':        'bg-teal-100 text-teal-700',
-  'Batter':            'bg-amber-100 text-amber-700',
-  'Bowler':            'bg-rose-100 text-rose-700',
-  'Wicketkeeper':      'bg-purple-100 text-purple-700',
+  'WK-Batter':         'bg-slate-100 text-[var(--brand)]',
+  'Batting Allrounder':'bg-slate-100 text-[var(--brand)]',
+  'Bowling Allrounder':'bg-slate-100 text-[var(--brand)]',
+  'Allrounder':        'bg-slate-100 text-[var(--brand)]',
+  'Batter':            'bg-slate-100 text-[var(--brand)]',
+  'Bowler':            'bg-slate-100 text-[var(--brand)]',
+  'Wicketkeeper':      'bg-slate-100 text-[var(--brand)]',
 };
 
 const RoleBadge = ({ role }) => {
@@ -133,8 +133,8 @@ const PlayerRow = ({ p, inUser, inFriend, isFrozen, onToggleUser, onToggleFriend
           title={inUser ? 'Remove from your team' : 'Add to your team'}
           className={`relative min-h-[30px] min-w-[46px] rounded-lg text-[11px] font-bold border transition-all duration-150
             ${inUser
-              ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-400/30'
-              : 'bg-white text-slate-500 border-slate-200 hover:border-emerald-500 hover:text-emerald-600'}
+              ? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm shadow-slate-300/40'
+              : 'bg-white text-slate-500 border-slate-200 hover:border-[var(--brand)] hover:text-[var(--brand)]'}
             disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <span className="flex items-center justify-center gap-0.5">
@@ -155,8 +155,8 @@ const PlayerRow = ({ p, inUser, inFriend, isFrozen, onToggleUser, onToggleFriend
           title={inFriend ? 'Remove from friend\'s team' : 'Add to friend\'s team'}
           className={`relative min-h-[30px] min-w-[46px] rounded-lg text-[11px] font-bold border transition-all duration-150
             ${inFriend
-              ? 'bg-violet-600 text-white border-violet-600 shadow-sm shadow-violet-400/30'
-              : 'bg-white text-slate-500 border-slate-200 hover:border-violet-400 hover:text-violet-600'}
+              ? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm shadow-slate-300/40'
+              : 'bg-white text-slate-500 border-slate-200 hover:border-[var(--brand)] hover:text-[var(--brand)]'}
             disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <span className="flex items-center justify-center gap-0.5">
@@ -181,9 +181,9 @@ const TeamSummary = ({ label, players, count, accentClass }) => (
       <span className="text-xs font-semibold text-slate-700">{label}</span>
       <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
         count >= 6 && count <= 9
-          ? 'bg-emerald-50 text-emerald-700'
+          ? 'bg-slate-100 text-[var(--brand)]'
           : count > 0
-          ? 'bg-amber-50 text-amber-600'
+          ? 'bg-slate-100 text-slate-600'
           : 'bg-slate-100 text-slate-500'
       }`}>
         {count}/9
@@ -422,14 +422,14 @@ export const PlayerSelectionPage = () => {
 
             {/* Playing XI not-yet-declared banner */}
             {squads?.isPlayingXIDeclared === false && (
-              <div className="mb-4 flex gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-                <svg className="mt-0.5 w-4 h-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24">
+              <div className="mb-4 flex gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                <svg className="mt-0.5 w-4 h-4 shrink-0 text-[var(--brand)]" fill="none" viewBox="0 0 24 24">
                   <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
                     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 <div>
-                  <p className="text-sm font-semibold text-amber-900">Playing XI not declared yet</p>
-                  <p className="text-xs text-amber-800 mt-0.5">
+                  <p className="text-sm font-semibold text-slate-900">Playing XI not declared yet</p>
+                  <p className="text-xs text-slate-600 mt-0.5">
                     Toss hasn't happened. Showing squads for now — we'll switch to the final XI once announced.
                   </p>
                 </div>
@@ -440,7 +440,7 @@ export const PlayerSelectionPage = () => {
             <p className="text-xs sm:text-sm text-slate-500 mb-4 leading-relaxed">
               Pick <span className="font-semibold text-slate-700">6–9 players</span> each from{' '}
               {team1Name && team2Name
-                ? <><span className="font-semibold text-blue-700">{team1Name}</span> vs <span className="font-semibold text-orange-600">{team2Name}</span></>
+                ? <><span className="font-semibold text-[var(--brand)]">{team1Name}</span> vs <span className="font-semibold text-[var(--brand)]">{team2Name}</span></>
                 : 'the match'}.{' '}
               <span className="text-slate-400">{showPlayingXI ? 'Playing XI.' : 'Showing squads.'}</span>
             </p>
@@ -481,25 +481,17 @@ export const PlayerSelectionPage = () => {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => {
-                  const isTeam1 = teamIndex === 0;
                   return (
-                    <div key={teamName} className={`rounded-xl border overflow-hidden
-                      ${isTeam1 ? 'border-blue-200' : 'border-orange-200'}`}>
+                    <div key={teamName} className="rounded-xl border border-slate-200 overflow-hidden">
                       {/* Team header */}
-                      <div className={`flex items-center gap-2 px-3 py-2.5 border-b
-                        ${isTeam1
-                          ? 'bg-gradient-to-r from-blue-50 to-white border-blue-200'
-                          : 'bg-gradient-to-r from-orange-50 to-white border-orange-200'}`}>
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0
-                          ${isTeam1 ? 'bg-blue-600' : 'bg-orange-500'}`}>
+                      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-200 bg-slate-50">
+                        <span className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-[var(--brand)]">
                           {teamIndex + 1}
                         </span>
-                        <span className={`text-xs font-bold tracking-wide
-                          ${isTeam1 ? 'text-blue-800' : 'text-orange-800'}`}>
+                        <span className="text-xs font-bold tracking-wide text-slate-700">
                           {teamName}
                         </span>
-                        <span className={`ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full
-                          ${isTeam1 ? 'bg-blue-100 text-blue-600' : 'bg-orange-100 text-orange-600'}`}>
+                        <span className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-slate-100 text-[var(--brand)]">
                           {players.length}p
                         </span>
                       </div>
@@ -536,20 +528,20 @@ export const PlayerSelectionPage = () => {
                 label={`${userDisplayName}'s team`}
                 players={userPlayers}
                 count={userPlayers.length}
-                accentClass="border-emerald-200 bg-emerald-50 text-emerald-800"
+                accentClass="border-slate-200 bg-slate-50 text-[var(--brand)]"
               />
               <TeamSummary
                 label={`${friendName}'s team`}
                 players={friendPlayers}
                 count={friendPlayers.length}
-                accentClass="border-violet-200 bg-violet-50 text-violet-800"
+                accentClass="border-slate-200 bg-slate-50 text-[var(--brand)]"
               />
             </div>
 
             {/* Progress hint */}
             {!isFrozen && (
               <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-400">
-                <span className={`w-2 h-2 rounded-full ${countsOk ? 'bg-emerald-400' : 'bg-slate-300'}`} />
+                <span className={`w-2 h-2 rounded-full ${countsOk ? 'bg-[var(--brand)]' : 'bg-slate-300'}`} />
                 {countsOk
                   ? 'Both teams are ready to save'
                   : `Select 6–9 for each team (you: ${userPlayers.length}, ${friendName}: ${friendPlayers.length})`}
@@ -564,7 +556,7 @@ export const PlayerSelectionPage = () => {
                 {/* User captain */}
                 <label className="block">
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-emerald-600 flex items-center justify-center">
+                    <span className="w-4 h-4 rounded-full bg-[var(--brand)] flex items-center justify-center">
                       <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                       </svg>
@@ -591,7 +583,7 @@ export const PlayerSelectionPage = () => {
                 {/* Friend captain */}
                 <label className="block">
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-violet-600 flex items-center justify-center">
+                    <span className="w-4 h-4 rounded-full bg-[var(--brand)] flex items-center justify-center">
                       <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                       </svg>

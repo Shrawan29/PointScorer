@@ -66,39 +66,49 @@ const SessionCard = ({ s, userDisplayName, friendName, deletingId, onDeleteSessi
 
   return (
     <div className={`rounded-xl border border-slate-200 bg-white p-3.5 ${isPending ? 'opacity-70' : ''}`}>
-      {/* Top: name + badge */}
-      <div className="flex items-start gap-2 mb-2">
-        <span className={`mt-0.5 shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getStatusBadgeClass(displayStatus)}`}>
-          {displayStatus}
-        </span>
-        <div className="text-sm font-semibold text-slate-900 leading-snug">{s.realMatchName}</div>
+      {/* Top row: name + delete icon */}
+      <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold text-slate-900 leading-snug">{s.realMatchName}</div>
+          <span className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold mt-1 ${getStatusBadgeClass(displayStatus)}`}>
+            {displayStatus}
+          </span>
+        </div>
+        {/* Trash icon button — no red, just a quiet slate icon */}
+        <button
+          type="button"
+          disabled={deletingId === String(s._id)}
+          onClick={() => onDeleteSession(s)}
+          className="shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600 hover:border-slate-300 disabled:opacity-40 transition-colors"
+          title="Delete session"
+        >
+          {deletingId === String(s._id) ? (
+            <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+          ) : (
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </button>
       </div>
 
       {/* Score row */}
-      <div className="flex items-center gap-2 text-xs text-slate-600 mb-0.5">
+      <div className="flex items-center gap-2 text-xs text-slate-600 mt-2 mb-0.5">
         <span>{userDisplayName} <span className="font-bold text-slate-900">{scoreSummary.userPoints}</span></span>
         <span className="text-slate-300">·</span>
         <span>{friendName} <span className="font-bold text-slate-900">{scoreSummary.friendPoints}</span></span>
       </div>
       <div className="text-[11px] text-slate-400 mb-3">{scoreSummary.summary}</div>
 
-      {/* Actions — full-width row at the bottom */}
-      <div className="flex gap-2">
-        {showResult && (
-          <Link to={`/sessions/${s._id}/result`} className="flex-1">
-            <Button variant="secondary" fullWidth>Result</Button>
-          </Link>
-        )}
-        <Button
-          variant="danger"
-          fullWidth={!showResult}
-          disabled={deletingId === String(s._id)}
-          onClick={() => onDeleteSession(s)}
-          className={showResult ? 'shrink-0' : ''}
-        >
-          {deletingId === String(s._id) ? 'Deleting…' : 'Delete'}
-        </Button>
-      </div>
+      {/* Result button — full width when shown */}
+      {showResult && (
+        <Link to={`/sessions/${s._id}/result`}>
+          <Button variant="secondary" fullWidth>View result</Button>
+        </Link>
+      )}
     </div>
   );
 };
@@ -109,6 +119,7 @@ export const FriendDetailPage = () => {
   const { user }     = useAuth();
 
   const [friend, setFriend]               = useState(null);
+  const [rulesets, setRulesets]           = useState([]);
   const [sessions, setSessions]           = useState([]);
   const [showPending, setShowPending]     = useState(false);
   const [error, setError]                 = useState('');
@@ -141,13 +152,15 @@ export const FriendDetailPage = () => {
     const run = async () => {
       setError(''); setFriendViewLink(''); setLoading(true);
       try {
-        const [friendsRes, sessionsRes, shareRes] = await Promise.all([
+        const [friendsRes, rulesetsRes, sessionsRes, shareRes] = await Promise.all([
           axiosInstance.get('/api/friends'),
+          axiosInstance.get(`/api/rulesets/friend/${friendId}`),
           axiosInstance.get(`/api/matches/friend/${friendId}?onlyFrozen=false&_ts=${Date.now()}`),
           axiosInstance.get(`/api/share/friend-view/${friendId}`).catch(() => null),
         ]);
         const friends = friendsRes.data || [];
         setFriend(friends.find((f) => f._id === friendId) || null);
+        setRulesets(rulesetsRes.data || []);
         setSessions(sessionsRes.data || []);
         setFriendViewLink(shareRes?.data?.url || '');
       } catch (err) {
@@ -234,6 +247,34 @@ export const FriendDetailPage = () => {
         </div>
       ) : (
         <div className="grid gap-5">
+
+          {/* ── Rulesets ──────────────────────────────────────────────────── */}
+          <Card
+            title="Rulesets"
+            actions={
+              <Link to={`/friends/${friendId}/rulesets/new`}>
+                <Button variant="secondary">Create</Button>
+              </Link>
+            }
+          >
+            {rulesets.length === 0 ? (
+              <p className="text-sm text-slate-500">No rulesets yet.</p>
+            ) : (
+              <div className="grid gap-2">
+                {rulesets.map((r) => (
+                  <div key={r._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold text-slate-900 truncate">{r.rulesetName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">{r._id}</div>
+                    </div>
+                    <Link to={`/friends/${friendId}/rulesets/${r._id}`}>
+                      <Button variant="secondary">Open</Button>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           {/* ── Match sessions ────────────────────────────────────────────── */}
           <Card title="Match Sessions">

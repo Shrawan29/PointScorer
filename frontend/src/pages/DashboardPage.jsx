@@ -7,7 +7,6 @@ import Button from '../components/Button.jsx';
 import Card from '../components/Card.jsx';
 import FormField from '../components/FormField.jsx';
 import Layout from '../components/Layout.jsx';
-import PageHeader from '../components/PageHeader.jsx';
 import DashboardMatches from './Dashboard.jsx';
 
 export const DashboardPage = () => {
@@ -15,8 +14,6 @@ export const DashboardPage = () => {
   const [friendName, setFriendName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const friendCount = useMemo(() => friends.length, [friends]);
 
   const loadFriends = async () => {
     const res = await axiosInstance.get('/api/friends');
@@ -26,7 +23,9 @@ export const DashboardPage = () => {
   useEffect(() => {
     setError('');
     setLoading(true);
-    loadFriends().catch((err) => setError(err?.response?.data?.message || 'Failed to load friends')).finally(() => setLoading(false));
+    loadFriends()
+      .catch((err) => setError(err?.response?.data?.message || 'Failed to load friends'))
+      .finally(() => setLoading(false));
   }, []);
 
   const onAddFriend = async () => {
@@ -43,42 +42,38 @@ export const DashboardPage = () => {
 
   return (
     <Layout>
-      <PageHeader
-        title="Dashboard"
-        subtitle={`You have ${friendCount} friend(s).`}
-      />
-
       {error && <Alert type="error">{error}</Alert>}
 
-      <div className="grid gap-4">
+      <div className="grid gap-3">
         <DashboardMatches />
 
         <Card title="Add Friend">
-          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
-            <div className="flex-1">
-              <FormField label="Friend name" value={friendName} onChange={setFriendName} />
-            </div>
-            <div>
-              <Button onClick={onAddFriend}>Add</Button>
-            </div>
+          <div className="flex flex-col gap-2.5">
+            <FormField
+              label="Friend name"
+              value={friendName}
+              onChange={setFriendName}
+              placeholder="Enter a name"
+            />
+            <Button onClick={onAddFriend} fullWidth>Add</Button>
           </div>
         </Card>
 
         <Card title="Friends">
           {loading ? (
-            <div className="text-sm text-slate-600">Loading...</div>
+            <div className="text-[13px] text-slate-500">Loading...</div>
           ) : friends.length === 0 ? (
-            <div className="text-sm text-slate-600">No friends yet.</div>
+            <div className="text-[13px] text-slate-500">No friends yet.</div>
           ) : (
-            <div className="grid gap-2.5">
+            <div className="grid gap-2">
               {friends.map((f) => (
                 <div
                   key={f._id}
-                  className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5"
                 >
                   <div>
-                    <div className="font-semibold text-slate-900">{f.friendName}</div>
-                    <div className="text-xs text-slate-500 break-all">{f._id}</div>
+                    <div className="text-[13px] font-semibold text-slate-900">{f.friendName}</div>
+                    <div className="text-[11px] text-slate-400 break-all">{f._id}</div>
                   </div>
                   <Link to={`/friends/${f._id}`}>
                     <Button variant="secondary">Open</Button>
@@ -90,10 +85,12 @@ export const DashboardPage = () => {
         </Card>
 
         <Card title="Scoring Rules">
-          <div className="space-y-2">
-            <p className="text-sm text-slate-600">Create reusable ruleset templates for scoring.</p>
+          <div className="flex flex-col gap-2.5">
+            <p className="text-[13px] text-slate-500">
+              Create reusable ruleset templates for scoring.
+            </p>
             <Link to="/rulesets/new-template">
-              <Button>Create Rule Template</Button>
+              <Button fullWidth>Create Rule Template</Button>
             </Link>
           </div>
         </Card>

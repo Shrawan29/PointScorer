@@ -2,16 +2,16 @@ import React from 'react';
 
 export const Card = ({ title, children, actions, className = '' }) => {
   return (
-    <div
-      className={`rounded-xl border border-slate-200 bg-white p-3 sm:p-4 ${className}`}
-    >
+    <div className={`rounded-2xl border border-slate-200 bg-white overflow-hidden ${className}`}>
       {(title || actions) && (
-        <div className="mb-3 flex items-start justify-between gap-3 border-b border-slate-100 pb-2.5">
-          <div className="font-display text-base sm:text-[17px] font-bold tracking-tight text-slate-900">{title}</div>
-          {actions}
+        <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-slate-100">
+          <div className="text-[13px] font-semibold text-slate-800">{title}</div>
+          {actions && <div className="flex items-center gap-2">{actions}</div>}
         </div>
       )}
-      {children}
+      <div className="px-3.5 py-3">
+        {children}
+      </div>
     </div>
   );
 };

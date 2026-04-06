@@ -109,7 +109,6 @@ export const FriendDetailPage = () => {
   const { user }     = useAuth();
 
   const [friend, setFriend]               = useState(null);
-  const [rulesets, setRulesets]           = useState([]);
   const [sessions, setSessions]           = useState([]);
   const [showPending, setShowPending]     = useState(false);
   const [error, setError]                 = useState('');
@@ -142,15 +141,13 @@ export const FriendDetailPage = () => {
     const run = async () => {
       setError(''); setFriendViewLink(''); setLoading(true);
       try {
-        const [friendsRes, rulesetsRes, sessionsRes, shareRes] = await Promise.all([
+        const [friendsRes, sessionsRes, shareRes] = await Promise.all([
           axiosInstance.get('/api/friends'),
-          axiosInstance.get(`/api/rulesets/friend/${friendId}`),
           axiosInstance.get(`/api/matches/friend/${friendId}?onlyFrozen=false&_ts=${Date.now()}`),
           axiosInstance.get(`/api/share/friend-view/${friendId}`).catch(() => null),
         ]);
         const friends = friendsRes.data || [];
         setFriend(friends.find((f) => f._id === friendId) || null);
-        setRulesets(rulesetsRes.data || []);
         setSessions(sessionsRes.data || []);
         setFriendViewLink(shareRes?.data?.url || '');
       } catch (err) {
@@ -237,34 +234,6 @@ export const FriendDetailPage = () => {
         </div>
       ) : (
         <div className="grid gap-5">
-
-          {/* ── Rulesets ──────────────────────────────────────────────────── */}
-          <Card
-            title="Rulesets"
-            actions={
-              <Link to={`/friends/${friendId}/rulesets/new`}>
-                <Button variant="secondary">Create</Button>
-              </Link>
-            }
-          >
-            {rulesets.length === 0 ? (
-              <p className="text-sm text-slate-500">No rulesets yet.</p>
-            ) : (
-              <div className="grid gap-2">
-                {rulesets.map((r) => (
-                  <div key={r._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 px-3.5 py-3">
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-slate-900 truncate">{r.rulesetName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">{r._id}</div>
-                    </div>
-                    <Link to={`/friends/${friendId}/rulesets/${r._id}`}>
-                      <Button variant="secondary">Open</Button>
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
 
           {/* ── Match sessions ────────────────────────────────────────────── */}
           <Card title="Match Sessions">

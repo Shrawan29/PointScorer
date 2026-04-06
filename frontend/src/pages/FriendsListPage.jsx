@@ -79,7 +79,6 @@ export const FriendsListPage = () => {
                 >
                   <div>
                     <div className="font-semibold text-slate-900">{f.friendName}</div>
-                    <div className="text-xs text-slate-500 break-all">{f._id}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link to={`/friends/${f._id}`}>

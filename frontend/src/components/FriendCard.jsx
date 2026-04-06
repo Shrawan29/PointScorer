@@ -9,7 +9,6 @@ export const FriendCard = ({ friend, selected, onSelect }) => {
 		>
 			<div className="min-w-0">
 				<div className="font-semibold text-slate-900 text-sm sm:text-base truncate">{friend?.friendName || 'Friend'}</div>
-				<div className="text-xs text-slate-500 truncate">{friend?._id || ''}</div>
 			</div>
 			<button
 				type="button"

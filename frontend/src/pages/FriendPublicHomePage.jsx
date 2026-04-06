@@ -114,10 +114,10 @@ export const FriendPublicHomePage = () => {
 	}, [token]);
 
 	return (
-		<div className="min-h-screen bg-slate-50">
-			<div className="max-w-4xl mx-auto px-4 py-6 grid gap-4">
+		<div className="public-shell">
+			<div className="public-wrap grid gap-4">
 				<div>
-					<h1 className="text-2xl font-bold text-slate-900">{data?.friend?.friendName || 'Friend View'}</h1>
+					<h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{data?.friend?.friendName || 'Friend View'}</h1>
 					<p className="text-sm text-slate-600 mt-1">
 						You can only access match history, result, and breakdown from this link.
 					</p>
@@ -154,12 +154,12 @@ export const FriendPublicHomePage = () => {
 						{sessions.length === 0 ? (
 							<div className="text-sm text-slate-600">No match history found.</div>
 						) : (
-							<div className="grid gap-2">
+							<div className="grid gap-2.5">
 								{sessions.map((s) => {
 									const displayStatus = getEffectiveStatus(s);
 									const scoreSummary = getMatchScoreSummary(s, ownerName, friendName);
 									return (
-										<div key={s._id} className="flex items-center justify-between gap-3 border rounded-md p-3 bg-white">
+										<div key={s._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 bg-white">
 											<div>
 												<div className="font-medium text-slate-900">{s.realMatchName}</div>
 												<div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">

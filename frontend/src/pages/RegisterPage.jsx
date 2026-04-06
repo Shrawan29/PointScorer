@@ -35,11 +35,11 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-sm">
+    <div className="auth-shell">
+      <div className="auth-wrap">
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-slate-900">PointScorer</h1>
-          <p className="text-sm text-slate-600 mt-2">Create your account</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-slate-900">PointScorer</h1>
+          <p className="mt-2 text-sm text-slate-600">Create your account</p>
         </div>
         <Card title="Register">
           <form onSubmit={onSubmit} className="space-y-3">
@@ -54,7 +54,7 @@ export const RegisterPage = () => {
           </form>
 
           <div className="text-xs text-slate-600 mt-3 text-center">
-            Already have an account? <Link className="text-slate-900 underline" to="/login">Login</Link>
+            Already have an account? <Link className="font-semibold text-[var(--brand)] underline" to="/login">Login</Link>
           </div>
         </Card>
       </div>

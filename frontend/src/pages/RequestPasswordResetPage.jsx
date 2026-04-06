@@ -37,11 +37,11 @@ export const RequestPasswordResetPage = () => {
 	};
 
 	return (
-		<div className="min-h-screen flex items-center justify-center px-4 py-8">
-			<div className="w-full max-w-sm">
+		<div className="auth-shell">
+			<div className="auth-wrap">
 				<div className="mb-6 text-center">
-					<h1 className="text-2xl font-bold text-slate-900">PointScorer</h1>
-					<p className="text-sm text-slate-600 mt-2">Request password reset</p>
+					<h1 className="font-display text-3xl font-bold tracking-tight text-slate-900">PointScorer</h1>
+					<p className="mt-2 text-sm text-slate-600">Request password reset</p>
 				</div>
 
 				<Card title="Request Reset">
@@ -63,7 +63,7 @@ export const RequestPasswordResetPage = () => {
 					</form>
 
 					<div className="text-xs text-slate-600 mt-3 text-center">
-						Back to <Link className="text-slate-900 underline" to="/login">Login</Link>
+						Back to <Link className="font-semibold text-[var(--brand)] underline" to="/login">Login</Link>
 					</div>
 				</Card>
 			</div>

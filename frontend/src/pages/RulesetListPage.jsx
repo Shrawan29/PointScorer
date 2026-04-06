@@ -57,12 +57,12 @@ export const RulesetListPage = () => {
         ) : rulesets.length === 0 ? (
           <div className="text-sm text-slate-600">No rulesets yet.</div>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid gap-2.5">
             {rulesets.map((r) => (
-              <div key={r._id} className="flex items-center justify-between gap-3">
+              <div key={r._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                 <div>
-                  <div className="font-medium text-slate-900">{r.rulesetName}</div>
-                  <div className="text-xs text-slate-500">{r._id}</div>
+                  <div className="font-semibold text-slate-900">{r.rulesetName}</div>
+                  <div className="text-xs text-slate-500 break-all">{r._id}</div>
                 </div>
                 <Link to={`/friends/${friendId}/rulesets/${r._id}`}>
                   <Button variant="secondary">Open</Button>

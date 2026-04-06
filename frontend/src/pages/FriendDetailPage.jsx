@@ -215,7 +215,7 @@ export const FriendDetailPage = () => {
         title={friendName}
         subtitle="Rulesets and match sessions for this friend."
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={onCopyFriendViewLink} disabled={copyingLink}>
               {copyingLink ? 'Copying...' : 'Copy friend result link'}
             </Button>
@@ -244,12 +244,12 @@ export const FriendDetailPage = () => {
             {rulesets.length === 0 ? (
               <div className="text-sm text-slate-600">No rulesets yet.</div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid gap-2.5">
                 {rulesets.map((r) => (
-                  <div key={r._id} className="flex items-center justify-between gap-3">
+                  <div key={r._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                     <div>
-                      <div className="font-medium text-slate-900">{r.rulesetName}</div>
-                      <div className="text-xs text-slate-500">{r._id}</div>
+                      <div className="font-semibold text-slate-900">{r.rulesetName}</div>
+                      <div className="text-xs text-slate-500 break-all">{r._id}</div>
                     </div>
                     <Link to={`/friends/${friendId}/rulesets/${r._id}`}>
                       <Button variant="secondary">Open</Button>
@@ -293,7 +293,7 @@ export const FriendDetailPage = () => {
               <div className="text-sm text-slate-600">
                 Only frozen selections appear by default.
               </div>
-              <label className="flex items-center gap-2 text-sm text-slate-700 select-none">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-700 select-none">
                 <input
                   type="checkbox"
                   checked={showPending}
@@ -308,12 +308,12 @@ export const FriendDetailPage = () => {
                 No frozen sessions yet. Create a session, pick players, then click “Freeze” on the Selection page.
               </div>
             ) : (
-              <div className="grid gap-2">
+              <div className="grid gap-2.5">
                 {frozen.map((s) => {
             const displayStatus = getEffectiveStatus(s);
             const scoreSummary = getMatchScoreSummary(s, userDisplayName, friendName);
             return (
-              <div key={s._id} className="flex items-center justify-between gap-3">
+              <div key={s._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3">
                 <div>
                   <div className="font-medium text-slate-900">{s.realMatchName}</div>
                   <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
@@ -352,12 +352,12 @@ export const FriendDetailPage = () => {
             ) : null}
 
             {showPending && pending.length > 0 ? (
-              <div className="grid gap-2">
+              <div className="grid gap-2.5">
                 {pending.map((s) => {
             const displayStatus = getEffectiveStatus(s);
             const scoreSummary = getMatchScoreSummary(s, userDisplayName, friendName);
             return (
-              <div key={s._id} className="flex items-center justify-between gap-3 opacity-90">
+              <div key={s._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 opacity-90">
                 <div>
                   <div className="font-medium text-slate-900">{s.realMatchName}</div>
                   <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">

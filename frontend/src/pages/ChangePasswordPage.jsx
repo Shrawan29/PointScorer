@@ -53,7 +53,7 @@ export const ChangePasswordPage = () => {
 	return (
 		<Layout>
 			<div className="max-w-xl">
-				<Card title="Change Password">
+				<Card title="Change Password" className="bg-white/95">
 					<form onSubmit={onSubmit} className="space-y-3">
 						{error && <Alert type="error">{error}</Alert>}
 						{success && <Alert type="success">{success}</Alert>}

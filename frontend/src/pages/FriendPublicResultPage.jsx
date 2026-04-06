@@ -118,11 +118,11 @@ export const FriendPublicResultPage = () => {
 	};
 
 	return (
-		<div className="min-h-screen bg-slate-50">
-			<div className="max-w-4xl mx-auto px-4 py-6 grid gap-4">
+		<div className="public-shell">
+			<div className="public-wrap grid gap-4">
 				<div className="flex items-center justify-between gap-2">
 					<div>
-						<h1 className="text-2xl font-bold text-slate-900">Match Result</h1>
+						<h1 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">Match Result</h1>
 						<p className="text-sm text-slate-600">{data?.match?.realMatchName || ''}</p>
 					</div>
 					<div className="flex gap-2">
@@ -150,7 +150,7 @@ export const FriendPublicResultPage = () => {
 				{loading ? (
 					<div className="text-sm text-slate-600">Loading...</div>
 				) : !data ? null : (
-					<div className="grid gap-3">
+					<div className="grid gap-4">
 						<Card title="Summary">
 							<div className="text-sm text-slate-700">{data?.ownerName || 'Owner'} points: {toNumber(data?.userTotalPoints)}</div>
 							<div className="text-sm text-slate-700">{data?.friendName || 'Friend'} points: {toNumber(data?.friendTotalPoints)}</div>
@@ -168,12 +168,12 @@ export const FriendPublicResultPage = () => {
 							) : userRows.length === 0 ? (
 								<div className="text-sm text-slate-600">No points found.</div>
 							) : (
-								<div className="grid gap-2">
+								<div className="grid gap-2.5">
 									{userRows
 										.slice()
 										.sort((a, b) => toNumber(b?.totalPoints) - toNumber(a?.totalPoints))
 										.map((r, idx) => (
-											<div key={r._id || `${r.team || 'USER'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between text-sm">
+											<div key={r._id || `${r.team || 'USER'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50/80 px-3 py-2 text-sm">
 												<div className="font-medium text-slate-900">{String(r?.playerId || r?.playerName || 'Unknown player')}</div>
 												<div className="font-semibold text-slate-700">{typeof r?.totalPoints === 'number' ? r.totalPoints : 0}</div>
 											</div>
@@ -188,12 +188,12 @@ export const FriendPublicResultPage = () => {
 							) : friendRows.length === 0 ? (
 								<div className="text-sm text-slate-600">No points found.</div>
 							) : (
-								<div className="grid gap-2">
+								<div className="grid gap-2.5">
 									{friendRows
 										.slice()
 										.sort((a, b) => toNumber(b?.totalPoints) - toNumber(a?.totalPoints))
 										.map((r, idx) => (
-											<div key={r._id || `${r.team || 'FRIEND'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between text-sm">
+											<div key={r._id || `${r.team || 'FRIEND'}:${r.playerId || r.playerName || 'unknown'}:${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50/80 px-3 py-2 text-sm">
 												<div className="font-medium text-slate-900">{String(r?.playerId || r?.playerName || 'Unknown player')}</div>
 												<div className="font-semibold text-slate-700">{typeof r?.totalPoints === 'number' ? r.totalPoints : 0}</div>
 											</div>

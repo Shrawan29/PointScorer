@@ -76,7 +76,7 @@ export const SharePage = () => {
           <textarea
             value={text}
             readOnly
-            className="w-full h-80 px-3 py-2 border rounded-md font-mono text-sm"
+            className="h-80 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-sm"
           />
           <div className="mt-3">
             <Button onClick={onCopy} disabled={!text}>

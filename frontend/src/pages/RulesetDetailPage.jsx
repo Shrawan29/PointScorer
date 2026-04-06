@@ -79,11 +79,11 @@ export const RulesetDetailPage = () => {
             <FormField label="Ruleset name" value={rulesetName} onChange={setRulesetName} />
 
             <label className="block">
-              <div className="text-sm font-medium text-slate-700 mb-1">Rules (JSON array)</div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">Rules (JSON array)</div>
               <textarea
                 value={rulesText}
                 onChange={(e) => setRulesText(e.target.value)}
-                className="w-full h-56 px-3 py-2 border rounded-md font-mono text-xs"
+                className="h-56 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-xs"
               />
             </label>
 
@@ -97,11 +97,11 @@ export const RulesetDetailPage = () => {
           {history.length === 0 ? (
             <div className="text-sm text-slate-600">No completed matches for this ruleset.</div>
           ) : (
-            <div className="grid gap-2">
+            <div className="grid gap-2.5">
               {history.map((s) => (
-                <div key={s._id} className="flex items-center justify-between gap-3">
+                <div key={s._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
                   <div>
-                    <div className="font-medium text-slate-900">{s.realMatchName}</div>
+                    <div className="font-semibold text-slate-900">{s.realMatchName}</div>
                     <div className="text-xs text-slate-500">
                       Played: {s.playedAt ? new Date(s.playedAt).toLocaleString() : 'N/A'}
                     </div>

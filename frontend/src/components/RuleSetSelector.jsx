@@ -5,12 +5,12 @@ export const RuleSetSelector = ({ rulesets, value, onChange, disabled }) => {
 
 	return (
 		<label className="block">
-			<div className="text-sm font-medium text-slate-700 mb-1">Ruleset</div>
+			<div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">Ruleset</div>
 			<select
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
 				disabled={disabled}
-				className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+				className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 disabled:bg-slate-100"
 			>
 				<option value="">Select ruleset</option>
 				{list.map((r) => (

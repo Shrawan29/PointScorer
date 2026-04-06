@@ -146,7 +146,7 @@ export const BreakdownPage = () => {
 			<Card
 				title={title}
 				actions={
-					<div className="text-sm text-slate-600">
+					<div className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-600">
 						{players.length} player{players.length === 1 ? '' : 's'}
 					</div>
 				}
@@ -162,11 +162,11 @@ export const BreakdownPage = () => {
 								const key = `${teamKey}:${String(p?.playerId)}`;
 								const isOpen = expanded.has(key);
 								return (
-									<div key={key} className="border rounded-md">
+									<div key={key} className="rounded-xl border border-slate-200 bg-slate-50/70">
 										<button
 											type="button"
 											onClick={() => toggleExpanded(teamKey, p?.playerId)}
-											className="w-full text-left px-3 py-2 flex items-center justify-between hover:bg-slate-50"
+											className="flex min-h-10 w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left hover:bg-white/70"
 										>
 											<div className="font-medium text-slate-900">
 												{p?.playerId || 'Unknown'}
@@ -182,18 +182,18 @@ export const BreakdownPage = () => {
 
 										{isOpen ? (
 											<div className="px-3 pb-3">
-												<div className="text-xs text-slate-600 mt-1">
+												<div className="mt-1 rounded-lg bg-white px-2.5 py-2 text-xs text-slate-600">
 													Runs: {toNumber(p?.stats?.runs)} • Fours: {toNumber(p?.stats?.fours)} • Sixes:{' '}
 													{toNumber(p?.stats?.sixes)} • Wkts: {toNumber(p?.stats?.wickets)} • Catches:{' '}
 													{toNumber(p?.stats?.catches)} • Runouts: {toNumber(p?.stats?.runouts)}
 												</div>
 
-												<div className="mt-2 text-sm text-slate-700">
+												<div className="mt-2 rounded-lg bg-white px-2.5 py-2 text-sm text-slate-700">
 													<div className="font-medium text-slate-900">Formula</div>
 													<div className="mt-1 grid gap-1">
 														{Array.isArray(p?.lines) && p.lines.length > 0 ? (
 															p.lines.map((l, idx) => (
-																<div key={`${key}:line:${idx}`} className="font-mono text-xs text-slate-700">
+																<div key={`${key}:line:${idx}`} className="rounded bg-slate-50 px-2 py-1 font-mono text-xs text-slate-700">
 																	{formatLine(l)}
 																</div>
 															))
@@ -203,7 +203,7 @@ export const BreakdownPage = () => {
 													</div>
 												</div>
 
-												<div className="mt-2 text-sm text-slate-700">
+												<div className="mt-2 rounded-lg bg-white px-2.5 py-2 text-sm text-slate-700">
 													Subtotal: {toNumber(p?.subtotal)} • Total: {toNumber(p?.totalPoints)}
 												</div>
 											</div>

@@ -53,9 +53,9 @@ export const FriendsListPage = () => {
 
       {error && <Alert type="error">{error}</Alert>}
 
-      <div className="grid gap-3">
+      <div className="grid gap-4">
         <Card title="Add Friend">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-2">
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-end">
             <div className="flex-1">
               <FormField label="Friend name" value={friendName} onChange={setFriendName} />
             </div>
@@ -71,12 +71,15 @@ export const FriendsListPage = () => {
           ) : friends.length === 0 ? (
             <div className="text-sm text-slate-600">No friends yet.</div>
           ) : (
-            <div className="grid gap-2">
+            <div className="grid gap-2.5">
               {friends.map((f) => (
-                <div key={f._id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div
+                  key={f._id}
+                  className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
                   <div>
-                    <div className="font-medium text-slate-900">{f.friendName}</div>
-                    <div className="text-xs text-slate-500">{f._id}</div>
+                    <div className="font-semibold text-slate-900">{f.friendName}</div>
+                    <div className="text-xs text-slate-500 break-all">{f._id}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Link to={`/friends/${f._id}`}>

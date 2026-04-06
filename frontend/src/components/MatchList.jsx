@@ -18,11 +18,11 @@ export const MatchList = ({ matches, pageSize = 10 }) => {
 	);
 
 	if (safeMatches.length === 0) {
-		return <div className="text-sm text-slate-600">No matches found.</div>;
+		return <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600">No matches found.</div>;
 	}
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-3.5">
 			{visibleMatches.map((m) => {
 				const key = m?.matchId || m?.matchUrl || `${m?.matchName}-${m?.startTime}`;
 				const matchId = m?.matchId;
@@ -30,7 +30,10 @@ export const MatchList = ({ matches, pageSize = 10 }) => {
 				const playTo = matchId ? `/select-friend/${matchId}` : '/dashboard';
 
 				return (
-					<div key={key} className="bg-white border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+					<div
+						key={key}
+						className="rounded-xl border border-slate-200 bg-white p-3.5 sm:p-4"
+					>
 						<Link
 							to={playTo}
 							state={{ match: m }}
@@ -39,7 +42,7 @@ export const MatchList = ({ matches, pageSize = 10 }) => {
 							<MatchCard match={m} />
 						</Link>
 
-						<div className="flex flex-col sm:flex-row gap-2 pt-3 border-t border-slate-100">
+						<div className="flex flex-col gap-2 border-t border-slate-100 pt-2.5 sm:flex-row">
 							<Link to={playTo} state={{ match: m }} className="flex-1 min-w-0">
 								<Button fullWidth>Play with Friend</Button>
 							</Link>
@@ -56,7 +59,7 @@ export const MatchList = ({ matches, pageSize = 10 }) => {
 				<button
 					type="button"
 					onClick={() => setVisibleCount((prev) => prev + pageSize)}
-					className="w-full py-2 text-sm font-medium text-slate-700 border border-slate-200 rounded-md hover:bg-slate-50"
+					className="w-full min-h-9 rounded-lg border border-slate-200 bg-white text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
 				>
 					Show more
 				</button>

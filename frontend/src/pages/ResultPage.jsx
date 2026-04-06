@@ -284,13 +284,13 @@ export const ResultPage = () => {
       {loading ? (
         <div className="text-xs sm:text-sm text-slate-600">Loading...</div>
       ) : !data ? null : (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           <Card title="Summary">
-          <div className="text-xs sm:text-sm text-slate-700">{userDisplayName} captain: {userCaptain || 'N/A'}</div>
-          <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} captain: {friendCaptain || 'N/A'}</div>
-          <div className="text-xs sm:text-sm text-slate-700 mt-1">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
-          <div className="text-xs sm:text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
-          <div className="text-xs sm:text-sm text-slate-700 mt-1">Result: {winnerSummary}</div>
+          <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-700">{userDisplayName} captain: {userCaptain || 'N/A'}</div>
+          <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-700">{friendDisplayName} captain: {friendCaptain || 'N/A'}</div>
+          <div className="mt-1 rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-700">{userDisplayName} points: {data.userTotalPoints ?? 0}</div>
+          <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-700">{friendDisplayName} points: {data.friendTotalPoints ?? 0}</div>
+          <div className="mt-1 rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-700">Result: {winnerSummary}</div>
 
       {!data?.selectionFrozen ? (
         <div className="mt-3 flex gap-2">
@@ -300,7 +300,7 @@ export const ResultPage = () => {
         </div>
       ) : null}
 
-      <div className="text-xs sm:text-sm mt-2">
+      <div className="mt-2 rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm">
         <span className="text-slate-700">Last refreshed: </span>
         <span className={refreshMeta?.lastRefreshedAt ? 'text-slate-700' : 'text-slate-500'}>
           {refreshMeta?.lastRefreshedAt
@@ -313,7 +313,7 @@ export const ResultPage = () => {
       </div>
 
       {refreshMeta?.scorecardState || refreshMeta?.scorecardStatus ? (
-        <div className="text-xs sm:text-sm text-slate-600">
+        <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-600">
           <span>Scorecard: </span>
           <span>
             {refreshMeta?.scorecardState ? String(refreshMeta.scorecardState) : '—'}
@@ -323,7 +323,7 @@ export const ResultPage = () => {
       ) : null}
 
       {typeof refreshMeta?.matchedCount === 'number' || typeof refreshMeta?.nonZeroCount === 'number' ? (
-        <div className="text-xs sm:text-sm text-slate-600">
+        <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm text-slate-600">
           <span>Matched players: </span>
           <span>{typeof refreshMeta?.matchedCount === 'number' ? refreshMeta.matchedCount : '—'}</span>
           <span> • Non-zero stats: </span>
@@ -336,14 +336,14 @@ export const ResultPage = () => {
           Some selected players were not found in the scorecard yet ({refreshMeta.unmatchedPlayers.length}).
         </div>
       ) : null}
-      <div className="text-xs sm:text-sm break-all">
+      <div className="rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm break-all">
         <span className="text-slate-700">Scorecard source: </span>
         {refreshMeta?.sourceUrl ? (
           <a
             href={refreshMeta.sourceUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-blue-600 hover:underline"
+            className="font-semibold text-[var(--brand)] hover:underline"
           >
             {refreshMeta.sourceUrl}
           </a>
@@ -379,7 +379,7 @@ export const ResultPage = () => {
         ) : userRows.length === 0 ? (
           <div className="text-xs sm:text-sm text-slate-600">No points found.</div>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid gap-2.5">
             {userRows
               .slice()
               .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
@@ -388,7 +388,7 @@ export const ResultPage = () => {
                 const playerLabel = String(r?.playerId || r?.playerName || 'Unknown player');
                 const playerPoints = typeof r?.totalPoints === 'number' ? r.totalPoints : 0;
                 return (
-                  <div key={r._id || `USER:${playerLabel}:${idx}`} className="flex items-center justify-between text-xs sm:text-sm">
+                  <div key={r._id || `USER:${playerLabel}:${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50/80 px-3 py-2 text-xs sm:text-sm">
                     <div className="font-medium text-slate-900">
                       {playerLabel}
                       {isCaptain ? <span className="text-xs text-slate-600"> (Captain)</span> : null}
@@ -409,7 +409,7 @@ export const ResultPage = () => {
         ) : friendRows.length === 0 ? (
           <div className="text-sm text-slate-600">No points found.</div>
         ) : (
-          <div className="grid gap-2">
+          <div className="grid gap-2.5">
             {friendRows
               .slice()
               .sort((a, b) => (b.totalPoints ?? 0) - (a.totalPoints ?? 0))
@@ -418,7 +418,7 @@ export const ResultPage = () => {
                 const playerLabel = String(r?.playerId || r?.playerName || 'Unknown player');
                 const playerPoints = typeof r?.totalPoints === 'number' ? r.totalPoints : 0;
                 return (
-                  <div key={r._id || `FRIEND:${playerLabel}:${idx}`} className="flex items-center justify-between">
+                  <div key={r._id || `FRIEND:${playerLabel}:${idx}`} className="flex items-center justify-between rounded-lg bg-slate-50/80 px-3 py-2">
                     <div className="font-medium text-slate-900">
                       {playerLabel}
                       {isCaptain ? <span className="text-xs text-slate-600"> (Captain)</span> : null}

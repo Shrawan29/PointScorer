@@ -94,22 +94,22 @@ export const MatchDetails = () => {
 					<div className="text-xs sm:text-sm text-slate-600">Match not found.</div>
 				</Card>
 			) : (
-				<div className="grid gap-3">
+				<div className="grid gap-4">
 					<Card title="Overview">
-						<div className="grid gap-2 text-sm">
-							<div>
+						<div className="grid gap-2.5 text-sm">
+							<div className="rounded-lg bg-slate-50/80 px-3 py-2">
 								<span className="text-slate-600">Teams:</span>{' '}
 								<span className="text-slate-900 text-xs sm:text-sm break-words">{teamsText || '—'}</span>
 							</div>
-							<div>
+							<div className="rounded-lg bg-slate-50/80 px-3 py-2">
 								<span className="text-slate-600">Match type:</span>{' '}
 								<span className="text-slate-900 text-xs sm:text-sm">{match?.matchType || '—'}</span>
 							</div>
-							<div>
+							<div className="rounded-lg bg-slate-50/80 px-3 py-2">
 								<span className="text-slate-600">Start time:</span>{' '}
 								<span className="text-slate-900 text-xs sm:text-sm">{startTimeText}</span>
 							</div>
-							<div>
+							<div className="rounded-lg bg-slate-50/80 px-3 py-2">
 								<span className="text-slate-600">Venue:</span>{' '}
 								<span className="text-slate-900 text-xs sm:text-sm break-words">{match?.venue || '—'}</span>
 							</div>

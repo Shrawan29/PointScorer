@@ -1,14 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
   color-scheme: light;
+  --bg-canvas: #f5f7fb;
+  --bg-accent: #e4edf9;
+  --surface: #ffffff;
+  --surface-soft: #f8fbff;
+  --stroke: #d9e2ef;
+  --text-primary: #0f172a;
+  --text-muted: #516074;
+  --brand: #144b8b;
+  --brand-strong: #103f74;
+  --ring: rgba(20, 75, 139, 0.2);
 }
 
 body {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-    "Apple Color Emoji", "Segoe UI Emoji";
-  background: #f8fafc;
+  min-height: 100vh;
+  font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(950px 520px at 0% -16%, rgba(188, 210, 240, 0.28), transparent 66%),
+    radial-gradient(740px 440px at 100% -28%, rgba(199, 220, 244, 0.25), transparent 64%),
+    linear-gradient(180deg, var(--bg-canvas) 0%, #f7f9fc 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+.font-display {
+  font-family: 'Sora', 'Manrope', sans-serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+input:focus,
+button:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+a {
+  color: inherit;
+}
+
+@layer base {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    border: 1px solid var(--stroke);
+    border-radius: 0.75rem;
+    background: var(--surface);
+    color: var(--text-primary);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):disabled,
+  select:disabled,
+  textarea:disabled {
+    background: #eef2f7;
+    color: #64748b;
+    cursor: not-allowed;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+  select:focus,
+  textarea:focus {
+    border-color: var(--brand);
+  }
+}
+
+@layer components {
+  .auth-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+  }
+
+  .auth-wrap {
+    width: 100%;
+    max-width: 25rem;
+  }
+
+  .public-shell {
+    min-height: 100vh;
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
+  .public-wrap {
+    width: 100%;
+    max-width: 64rem;
+    margin-inline: auto;
+  }
+
+  .surface-panel {
+    border: 1px solid var(--stroke);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 16px 34px -26px rgba(15, 23, 42, 0.55);
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    background:
+      radial-gradient(760px 420px at 0% -20%, rgba(188, 210, 240, 0.3), transparent 66%),
+      linear-gradient(180deg, #f7f9fc 0%, #f8fafd 100%);
+  }
+
+  .auth-shell {
+    padding: 1rem 0.75rem 1.25rem;
+  }
+
+  .public-shell {
+    padding: 0.75rem 0.625rem 1.25rem;
+  }
 }

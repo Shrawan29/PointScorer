@@ -158,7 +158,7 @@ export const SelectFriend = () => {
 			{loading ? (
 				<div className="text-xs sm:text-sm text-slate-600">Loading...</div>
 			) : (
-				<div className="grid gap-3">
+				<div className="grid gap-4">
 					<Card title="Select a friend">
 						{friends.length === 0 ? (
 							<div className="text-xs sm:text-sm text-slate-600">

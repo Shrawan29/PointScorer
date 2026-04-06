@@ -376,14 +376,15 @@ export const DashboardMatches = () => {
 			{error && <Alert type="error">{error}</Alert>}
 
 			<div className="flex flex-col gap-4">
-				<div className="flex flex-col lg:flex-row lg:items-end gap-3">
-					<div className="flex items-center gap-2 flex-wrap">
+				<div className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+					<div className="grid gap-2 sm:flex sm:items-center sm:justify-between">
+						<div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2">
 						<button
 							type="button"
 							onClick={() => setActiveTab(TAB_TODAY)}
-							className={`px-3 py-2 rounded-md text-sm border ${
+							className={`min-h-9 px-3 rounded-lg text-[13px] font-semibold border transition-colors ${
 								activeTab === TAB_TODAY
-									? 'bg-slate-900 text-white border-slate-900'
+									? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm'
 									: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 							}`}
 						>
@@ -392,37 +393,36 @@ export const DashboardMatches = () => {
 						<button
 							type="button"
 							onClick={() => setActiveTab(TAB_UPCOMING)}
-							className={`px-3 py-2 rounded-md text-sm border ${
+							className={`min-h-9 px-3 rounded-lg text-[13px] font-semibold border transition-colors ${
 								activeTab === TAB_UPCOMING
-									? 'bg-slate-900 text-white border-slate-900'
+									? 'bg-[var(--brand)] text-white border-[var(--brand)] shadow-sm'
 									: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 							}`}
 						>
 							Upcoming ({upcomingMatches.length})
 						</button>
+						</div>
 						<button
 							type="button"
 							onClick={() => loadMatches(false, { includeIplSeason: matchType === TYPE_IPL, requestedType: TYPE_ALL })}
 							disabled={loading}
-							className="px-3 py-2 rounded-md text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+							className="min-h-9 w-full sm:w-auto px-3 rounded-lg text-[13px] font-semibold border border-slate-200 bg-white text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
 							title="Clear cache and refresh"
 						>
 							{loading ? 'Loading...' : 'Refresh'}
 						</button>
 					</div>
 
-					<div className="flex-1" />
-
-					<div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-end">
+					<div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
 						<div>
-							<div className="text-sm font-medium text-slate-700 mb-1">Match format</div>
+							<div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Match format</div>
 							<div className="flex flex-wrap gap-2">
 								<button
 									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_ALL)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+									className={`min-h-8 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
 										matchType === TYPE_ALL
-											? 'bg-slate-900 text-white border-slate-900'
+											? 'bg-[var(--brand)] text-white border-[var(--brand)]'
 											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 									}`}
 								>
@@ -431,9 +431,9 @@ export const DashboardMatches = () => {
 								<button
 									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_IPL)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+									className={`min-h-8 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
 										matchType === TYPE_IPL
-											? 'bg-slate-900 text-white border-slate-900'
+											? 'bg-[var(--brand)] text-white border-[var(--brand)]'
 											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 									}`}
 								>
@@ -442,9 +442,9 @@ export const DashboardMatches = () => {
 								<button
 									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_T20)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+									className={`min-h-8 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
 										matchType === TYPE_T20
-											? 'bg-slate-900 text-white border-slate-900'
+											? 'bg-[var(--brand)] text-white border-[var(--brand)]'
 											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 									}`}
 								>
@@ -453,9 +453,9 @@ export const DashboardMatches = () => {
 								<button
 									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_ODI)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+									className={`min-h-8 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
 										matchType === TYPE_ODI
-											? 'bg-slate-900 text-white border-slate-900'
+											? 'bg-[var(--brand)] text-white border-[var(--brand)]'
 											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 									}`}
 								>
@@ -464,9 +464,9 @@ export const DashboardMatches = () => {
 								<button
 									type="button"
 									onClick={() => handleMatchTypeChange(TYPE_TEST)}
-									className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+									className={`min-h-8 px-3 rounded-full text-[12px] font-semibold border transition-colors ${
 										matchType === TYPE_TEST
-											? 'bg-slate-900 text-white border-slate-900'
+											? 'bg-[var(--brand)] text-white border-[var(--brand)]'
 											: 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
 									}`}
 								>
@@ -475,9 +475,9 @@ export const DashboardMatches = () => {
 							</div>
 						</div>
 
-						<div className="block">
-							<div className="text-sm font-medium text-slate-700 mb-1">Search</div>
-							<div className="flex gap-2">
+						<div>
+							<div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Search</div>
+							<div className="grid grid-cols-[1fr_auto] gap-2">
 								<input
 									value={searchInput}
 									onChange={(e) => setSearchInput(e.target.value)}
@@ -485,12 +485,12 @@ export const DashboardMatches = () => {
 										if (e.key === 'Enter') applySearchFilter();
 									}}
 									placeholder="Search match or team"
-									className="w-full sm:w-64 px-3 py-2 border border-slate-200 rounded-md bg-white text-sm"
+									className="w-full sm:w-72 min-h-9 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
 								/>
 								<button
 									type="button"
 									onClick={applySearchFilter}
-									className="px-3 py-2 rounded-md text-sm border bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+									className="min-h-9 px-3 rounded-lg text-[13px] font-semibold border border-[var(--brand)] bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
 								>
 									Search
 								</button>
@@ -500,7 +500,7 @@ export const DashboardMatches = () => {
 				</div>
 
 				{loading ? (
-					<div className="text-xs sm:text-sm text-slate-600">Loading matches...</div>
+					<div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs sm:text-sm text-slate-600">Loading matches...</div>
 				) : (
 					<div>
 						{activeTab === TAB_TODAY ? (

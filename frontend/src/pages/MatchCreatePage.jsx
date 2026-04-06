@@ -108,11 +108,11 @@ export const MatchCreatePage = () => {
             </div>
           ) : (
             <label className="block">
-              <div className="text-sm font-medium text-slate-700 mb-1">Ruleset</div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">Ruleset</div>
               <select
                 value={rulesetId}
                 onChange={(e) => setRulesetId(e.target.value)}
-                className="w-full px-3 py-2 border rounded-md bg-white"
+                className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm"
               >
                 {rulesets.map((r) => (
                   <option key={r._id} value={r._id}>
@@ -136,7 +136,7 @@ export const MatchCreatePage = () => {
             <div className="mb-3">
               <div className="text-sm text-slate-600 mb-2">Select from backend list:</div>
               <select
-                className="w-full px-3 py-2 border rounded-md bg-white"
+                className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm"
                 onChange={(e) => {
                   const picked = matchList.find((m) => String(m.matchUrl) === e.target.value);
                   if (picked) {
@@ -165,7 +165,7 @@ export const MatchCreatePage = () => {
         </Card>
 
         <div>
-          <Button onClick={onCreate} disabled={!canCreate || creating}>
+          <Button onClick={onCreate} disabled={!canCreate || creating} fullWidth>
             {creating ? 'Creating...' : 'Create session'}
           </Button>
         </div>

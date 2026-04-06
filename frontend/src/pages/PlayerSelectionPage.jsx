@@ -368,10 +368,10 @@ export const PlayerSelectionPage = () => {
       {loading ? (
         <div className="text-xs sm:text-sm text-slate-600">Loading...</div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-4 pb-24 sm:pb-0">
           <Card title="Selected players">
               {squads?.isPlayingXIDeclared === false ? (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
                   <div className="text-amber-900 font-semibold text-sm">Playing XI not declared yet</div>
                   <p className="text-xs sm:text-sm text-amber-800 mt-1">
                     Toss hasn’t happened yet. Showing squads for now. Once Playing XI is announced, we’ll show the final XI.
@@ -387,21 +387,21 @@ export const PlayerSelectionPage = () => {
 
                 <div className="flex flex-col gap-3">
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-slate-700 mb-1">Search players</div>
+                    <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">Search players</div>
                     <input
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       placeholder="Search"
                       disabled={isFrozen}
-                      className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                      className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm disabled:bg-slate-100"
                     />
-                    <div className="mt-3 border rounded-md bg-slate-50 p-2">
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
                       {Object.keys(filteredPlayersByTeam).length === 0 ? (
                     <div className="p-3 text-xs sm:text-sm text-slate-600">No players found.</div>
                       ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                           {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
-                        <div key={teamName} className="border rounded-md bg-white overflow-hidden min-w-0">
+                        <div key={teamName} className="min-w-0 rounded-xl border border-slate-200 bg-white">
                           <div className={`px-3 py-2.5 font-semibold text-xs sm:text-sm border-b-2 ${
                             teamIndex === 0 
                               ? 'bg-blue-50 text-blue-900 border-blue-200' 
@@ -416,13 +416,13 @@ export const PlayerSelectionPage = () => {
                               {teamName}
                             </div>
                           </div>
-                          <div className="max-h-64 overflow-auto divide-y">
+                          <div className="divide-y max-h-64 overflow-auto">
                           {players.map((p) => {
                             const inUser = userPlayers.includes(p);
                             const inFriend = friendPlayers.includes(p);
                             const displayLabel = formatPlayerLabel(p);
                             return (
-                              <div key={p} className="p-2 flex items-center justify-between gap-2 hover:bg-slate-50">
+                                <div key={p} className="flex items-center justify-between gap-2 px-2.5 py-2 hover:bg-slate-50">
                                 <div className="text-xs sm:text-sm text-slate-900 truncate">{displayLabel}</div>
                                 <div className="flex gap-1">
                                   <button
@@ -433,9 +433,9 @@ export const PlayerSelectionPage = () => {
                                         prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
                                       );
                                     }}
-                                    className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                      className={`min-h-8 px-2.5 rounded-lg text-xs font-semibold border whitespace-nowrap ${
                                       inUser
-                                        ? 'bg-slate-900 text-white border-slate-900'
+                                          ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
                                         : 'bg-white text-slate-700 border-slate-200'
                                     }`}
                                   >
@@ -449,9 +449,9 @@ export const PlayerSelectionPage = () => {
                                         prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]
                                       );
                                     }}
-                                    className={`px-2 py-1 rounded-md text-xs border whitespace-nowrap ${
+                                      className={`min-h-8 px-2.5 rounded-lg text-xs font-semibold border whitespace-nowrap ${
                                       inFriend
-                                        ? 'bg-slate-900 text-white border-slate-900'
+                                          ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
                                         : 'bg-white text-slate-700 border-slate-200'
                                     }`}
                                   >
@@ -470,10 +470,10 @@ export const PlayerSelectionPage = () => {
                   </div>
 
               <div className="flex-1 grid grid-cols-1 gap-4">
-                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                   <div className="text-sm font-semibold text-slate-900 mb-2">{userDisplayName}'s team ({userPlayers.length}/9)</div>
                   <div className="text-xs text-slate-600 mb-2">Pick 6–9 players</div>
-                  <div className="text-xs sm:text-sm text-slate-900 min-h-12 bg-white border border-slate-100 rounded p-2 break-words">
+                  <div className="min-h-12 rounded-lg border border-slate-200 bg-white p-2 text-xs sm:text-sm text-slate-900 break-words">
                     {userPlayers.length === 0 ? (
                       <span className="text-slate-400">No players selected yet</span>
                     ) : (
@@ -482,10 +482,10 @@ export const PlayerSelectionPage = () => {
                   </div>
                 </div>
 
-                <div className="border border-slate-200 rounded-lg p-3 bg-slate-50">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                   <div className="text-sm font-semibold text-slate-900 mb-2">{friendName}'s team ({friendPlayers.length}/9)</div>
                   <div className="text-xs text-slate-600 mb-2">Pick 6–9 players</div>
-                  <div className="text-xs sm:text-sm text-slate-900 min-h-12 bg-white border border-slate-100 rounded p-2 break-words">
+                  <div className="min-h-12 rounded-lg border border-slate-200 bg-white p-2 text-xs sm:text-sm text-slate-900 break-words">
                     {friendPlayers.length === 0 ? (
                       <span className="text-slate-400">No players selected yet</span>
                     ) : (
@@ -502,12 +502,12 @@ export const PlayerSelectionPage = () => {
             <Card title="Captains">
               <div className="grid gap-3 grid-cols-1">
                 <label className="block">
-                  <div className="text-sm font-medium text-slate-700 mb-1">{userDisplayName} captain</div>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{userDisplayName} captain</div>
                   <select
                     value={userCaptain}
                     onChange={(e) => setUserCaptain(e.target.value)}
                     disabled={isFrozen}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                    className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm disabled:bg-slate-100"
                   >
                     <option value="">Select captain</option>
                     {userPlayers.map((p) => (
@@ -519,12 +519,12 @@ export const PlayerSelectionPage = () => {
                 </label>
 
                 <label className="block">
-                  <div className="text-sm font-medium text-slate-700 mb-1">{friendName} captain</div>
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{friendName} captain</div>
                   <select
                     value={friendCaptain}
                     onChange={(e) => setFriendCaptain(e.target.value)}
                     disabled={isFrozen}
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300 text-sm"
+                    className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm disabled:bg-slate-100"
                   >
                     <option value="">Select captain</option>
                     {friendPlayers.map((p) => (
@@ -545,6 +545,17 @@ export const PlayerSelectionPage = () => {
             <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection} fullWidth>
               {freezing ? 'Freezing...' : 'Freeze'}
             </Button>
+          </div>
+
+          <div className="sm:hidden fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-3 pt-2 pb-[max(env(safe-area-inset-bottom),0.6rem)] backdrop-blur">
+            <div className="mx-auto w-full max-w-5xl grid grid-cols-2 gap-2">
+              <Button onClick={onSave} disabled={saving || isFrozen} fullWidth>
+                {saving ? 'Saving...' : selection ? 'Update selection' : 'Create selection'}
+              </Button>
+              <Button variant="secondary" onClick={onFreeze} disabled={freezing || isFrozen || !selection} fullWidth>
+                {freezing ? 'Freezing...' : 'Freeze'}
+              </Button>
+            </div>
           </div>
 
           {isFrozen && <Alert>Selection is frozen. UI is read-only.</Alert>}

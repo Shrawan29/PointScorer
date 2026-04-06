@@ -437,7 +437,7 @@ const AdminDashboard = () => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full min-h-11 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm"
               />
             </div>
           )}
@@ -454,7 +454,7 @@ const AdminDashboard = () => {
                 {paginatedUsers.map((u) => (
                   <div 
                     key={u._id} 
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 transition"
+                    className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-3 transition hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-slate-900">{u.name}</div>
@@ -463,19 +463,19 @@ const AdminDashboard = () => {
 
                     <div className="flex flex-wrap gap-2">
                       {editingFriendsLimit === u._id ? (
-                        <div className="flex gap-2 items-center bg-slate-100 px-2 py-1 rounded text-xs">
+                        <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs">
                           <input
                             type="number"
                             min="1"
                             max="100"
                             value={editingFriendsValue}
                             onChange={(e) => setEditingFriendsValue(e.target.value)}
-                            className="w-16 px-2 py-1 border border-slate-300 rounded text-sm"
+                            className="w-16 rounded-lg border border-slate-200 px-2 py-1 text-sm"
                             autoFocus
                           />
                           <button
                             onClick={() => handleUpdateMaxFriends(u._id)}
-                            className="px-2 py-1 bg-green-500 hover:bg-green-600 text-white rounded text-xs font-semibold"
+                            className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
                           >
                             Save
                           </button>
@@ -484,13 +484,13 @@ const AdminDashboard = () => {
                               setEditingFriendsLimit(null);
                               setEditingFriendsValue('');
                             }}
-                            className="px-2 py-1 bg-slate-300 hover:bg-slate-400 text-slate-900 rounded text-xs font-semibold"
+                            className="rounded-lg bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-300"
                           >
                             Cancel
                           </button>
                         </div>
                       ) : (
-                        <div className="text-center px-2 py-1 bg-slate-100 rounded text-xs">
+                        <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
                           <div className="text-slate-600">Friends</div>
                           <div className="font-semibold text-slate-900">{u.maxFriendsAllowed}</div>
                           <button
@@ -498,7 +498,7 @@ const AdminDashboard = () => {
                               setEditingFriendsLimit(u._id);
                               setEditingFriendsValue(u.maxFriendsAllowed);
                             }}
-                            className="mt-1 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-medium"
+                            className="mt-1 rounded-md bg-[var(--brand)] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[var(--brand-strong)]"
                           >
                             Edit limit
                           </button>
@@ -507,17 +507,17 @@ const AdminDashboard = () => {
 
                       <div className="text-center px-2 py-1 rounded text-xs font-semibold">
                         {u.isAdmin ? (
-                          <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">Admin</span>
+                          <span className="rounded bg-sky-100 px-2 py-1 text-sky-700">Admin</span>
                         ) : (
-                          <span className="bg-slate-100 text-slate-700 px-2 py-1 rounded">User</span>
+                          <span className="rounded bg-slate-100 px-2 py-1 text-slate-700">User</span>
                         )}
                       </div>
 
                       <div className="text-center px-2 py-1 rounded text-xs font-semibold">
                         {u.isBlocked ? (
-                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded">Blocked</span>
+                          <span className="rounded bg-red-100 px-2 py-1 text-red-700">Blocked</span>
                         ) : (
-                          <span className="bg-green-100 text-green-700 px-2 py-1 rounded">Active</span>
+                          <span className="rounded bg-emerald-100 px-2 py-1 text-emerald-700">Active</span>
                         )}
                       </div>
                     </div>
@@ -552,7 +552,7 @@ const AdminDashboard = () => {
                   <button
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className="px-3 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
+                    className="min-h-9 rounded-lg border border-slate-300 px-3 py-1 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   >
                     Previous
                   </button>
@@ -562,7 +562,7 @@ const AdminDashboard = () => {
                   <button
                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className="px-3 py-1 rounded border border-slate-300 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
+                    className="min-h-9 rounded-lg border border-slate-300 px-3 py-1 text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   >
                     Next
                   </button>

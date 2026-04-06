@@ -114,7 +114,7 @@ export const RulesetCreatePage = () => {
       {error && <Alert type="error">{error}</Alert>}
 
       <div className="grid gap-4">
-        <Card title="Basics" className="p-3">
+        <Card title="Basics">
           <div className="grid gap-3">
             <FormField
               label="Ruleset name"
@@ -123,7 +123,7 @@ export const RulesetCreatePage = () => {
               placeholder="e.g., Weekend League"
             />
             
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
               <input
                 type="checkbox"
                 checked={isTemplate}
@@ -149,7 +149,6 @@ export const RulesetCreatePage = () => {
 
         <Card
           title="Scoring rules"
-          className="p-3"
           actions={
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={() => setAllEnabled(true)}>
@@ -161,7 +160,7 @@ export const RulesetCreatePage = () => {
               <Button variant="secondary" onClick={resetDefaults}>
                 Reset
               </Button>
-              <label className="flex items-center gap-2 h-10 px-3 border border-slate-200 rounded-md bg-white">
+              <label className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
                 <input
                   type="checkbox"
                   checked={showAdvanced}
@@ -172,13 +171,13 @@ export const RulesetCreatePage = () => {
             </div>
           }
         >
-          <div className="border rounded-md p-2.5 mb-2 bg-slate-50">
+          <div className="mb-2 rounded-xl border border-slate-200 p-3 bg-slate-50/70">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-slate-700">Captain multiplier</div>
                 <div className="text-xs text-slate-600">Enable to apply a fixed {CAPTAIN_MULTIPLIER}x multiplier to captains.</div>
               </div>
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
                 <input
                   type="checkbox"
                   checked={captainMultiplierEnabled}
@@ -197,7 +196,7 @@ export const RulesetCreatePage = () => {
               const isMilestone = ev === 'fifty' || ev === 'hundred' || ev === 'threeWicket' || ev === 'fiveWicket';
 
               return (
-                <div key={ev} className={`border border-slate-200 rounded-md p-2.5 ${enabled ? 'bg-white' : 'bg-slate-50'}`}>
+                <div key={ev} className={`rounded-xl border border-slate-200 p-3 ${enabled ? 'bg-white' : 'bg-slate-50/70'}`}>
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                     <div className="flex-1">
                       <div className="text-sm font-medium text-slate-900">{meta?.label || ev}</div>
@@ -212,7 +211,7 @@ export const RulesetCreatePage = () => {
                           value={String(rule.points ?? 0)}
                           disabled={!enabled}
                           onChange={(e) => updateRule(idx, { points: Number(e.target.value) })}
-                          className="w-full sm:w-24 px-3 py-2 border rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                          className="w-full sm:w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
                         />
                       </label>
 
@@ -224,7 +223,7 @@ export const RulesetCreatePage = () => {
                             value={String(rule.multiplier ?? 1)}
                             disabled={!enabled}
                             onChange={(e) => updateRule(idx, { multiplier: Number(e.target.value) })}
-                            className="w-full sm:w-24 px-3 py-2 border rounded-md bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-slate-300"
+                            className="w-full sm:w-24 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-100"
                           />
                         </label>
                       ) : null}

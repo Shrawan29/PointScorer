@@ -4,11 +4,11 @@ import Card from './Card.jsx';
 
 export const SessionConflictModal = ({ email, password, onForceLogout, loading, error }) => {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center px-4 py-8 z-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-8 backdrop-blur-sm">
       <div className="w-full max-w-sm">
         <Card title="Session Conflict">
           <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-sm text-amber-900 font-semibold">
                 You are already logged in on another device.
               </p>
@@ -18,12 +18,12 @@ export const SessionConflictModal = ({ email, password, onForceLogout, loading, 
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3">
                 <p className="text-sm text-red-700">{error}</p>
               </div>
             )}
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
+            <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
               <p className="text-sm text-blue-900 font-semibold">What will happen:</p>
               <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
                 <li>Confirm your password</li>
@@ -38,7 +38,7 @@ export const SessionConflictModal = ({ email, password, onForceLogout, loading, 
                 type="password"
                 value={password}
                 readOnly
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-slate-50 text-slate-600"
+                className="w-full min-h-10 rounded-xl border border-slate-300 bg-slate-50 px-3 text-slate-600"
                 disabled
               />
               <p className="text-xs text-slate-500 mt-1">Your password (not editable in this dialog)</p>

@@ -28,6 +28,10 @@ app.get('/health', (req, res) => {
   const readyState = mongoose.connection?.readyState;
   // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
   const dbStatus = readyState === 1 ? 'connected' : readyState === 2 ? 'connecting' : 'disconnected';
+  const source = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || 'unknown';
+  const userAgent = req.headers['user-agent'] || 'unknown';
+  // eslint-disable-next-line no-console
+  console.log(`[Health] Hit from ${source} ua="${userAgent}" db=${dbStatus}`);
   res.status(200).json({ status: 'OK', db: dbStatus });
 });
 

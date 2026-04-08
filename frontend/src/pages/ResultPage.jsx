@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 const AUTO_REFRESH_INTERVAL_MS = 60_000;
+const RESULT_CACHE_TTL_MS = 90_000;
 
 const isCompletedByScorecard = (meta) => {
   const state = String(meta?.scorecardState || '').toUpperCase();
@@ -77,6 +78,7 @@ const PlayerPointRow = ({ label, points, isCaptain, rank, accentClass }) => (
 export const ResultPage = () => {
   const { sessionId } = useParams();
   const { user } = useAuth();
+  const resultCacheKey = useMemo(() => `matchResultCacheV1_${sessionId}`, [sessionId]);
 
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -86,6 +88,29 @@ export const ResultPage = () => {
   const [freezingSelection, setFreezingSelection] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshMeta, setRefreshMeta] = useState(null);
+
+  const writeResultCache = useCallback(
+    (payload) => {
+      if (!payload) return;
+      try {
+        sessionStorage.setItem(resultCacheKey, JSON.stringify({ ts: Date.now(), data: payload }));
+      } catch {
+        // ignore cache write errors
+      }
+    },
+    [resultCacheKey],
+  );
+
+  const fetchResultPayload = useCallback(
+    async ({ skipAutoRefresh = false } = {}) => {
+      const params = new URLSearchParams();
+      params.set('t', String(Date.now()));
+      if (skipAutoRefresh) params.set('skipAutoRefresh', '1');
+      const res = await axiosInstance.get(`/api/history/match/${sessionId}?${params.toString()}`);
+      return res.data;
+    },
+    [sessionId],
+  );
 
   const userCaptain    = useMemo(() => data?.userCaptain   || data?.captain || null, [data]);
   const friendCaptain  = useMemo(() => data?.friendCaptain || null, [data]);
@@ -135,33 +160,86 @@ export const ResultPage = () => {
   const canRefresh = useMemo(() => Boolean(data?.selectionFrozen), [data]);
 
   useEffect(() => {
-    const run = async () => {
-      setError(''); setInfo(''); setLoading(true);
+    let cancelled = false;
+
+    const readCache = () => {
       try {
-        const res = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-        const payload = res.data;
-        const payloadStatus = String(payload?.match?.status || '').toUpperCase();
-        if (payload?.matchState === 'UPCOMING' && payloadStatus !== 'COMPLETED') {
-          setData(payload); setError(''); return;
-        }
-        setError('');
-        if (Array.isArray(payload?.playerWisePoints) && payload.playerWisePoints.length === 0) {
+        const raw = sessionStorage.getItem(resultCacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - Number(parsed?.ts || 0);
+        if (age < 0 || age > RESULT_CACHE_TTL_MS) return null;
+        return parsed?.data || null;
+      } catch {
+        return null;
+      }
+    };
+
+    const applyPayload = (payload) => {
+      if (cancelled || !payload) return;
+      setData(payload);
+      writeResultCache(payload);
+    };
+
+    const run = async () => {
+      setError('');
+      setInfo('');
+
+      const cachedPayload = readCache();
+      if (cachedPayload) {
+        applyPayload(cachedPayload);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
+
+      try {
+        const quickPayload = await fetchResultPayload({ skipAutoRefresh: true });
+        if (cancelled) return;
+
+        applyPayload(quickPayload);
+        setLoading(false);
+
+        const payloadStatus = String(quickPayload?.match?.status || '').toUpperCase();
+        const isUpcomingWithoutResult =
+          String(quickPayload?.matchState || '').toUpperCase() === 'UPCOMING' && payloadStatus !== 'COMPLETED';
+
+        if (isUpcomingWithoutResult) return;
+
+        const hasPoints =
+          Array.isArray(quickPayload?.playerWisePoints) && quickPayload.playerWisePoints.length > 0;
+
+        if (!hasPoints) {
           try {
             await axiosInstance.post(`/api/scoring/session/${sessionId}/calculate`);
-            const again = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-            setData(again.data); return;
           } catch (calcErr) {
+            if (cancelled) return;
             const msg = calcErr?.response?.data?.message;
             if (msg) setError(msg);
           }
         }
-        setData(payload);
+
+        try {
+          const freshPayload = await fetchResultPayload();
+          if (cancelled) return;
+          applyPayload(freshPayload);
+          setError('');
+        } catch {
+          // Keep quick payload if background freshness request fails.
+        }
       } catch (err) {
-        setError(err?.response?.data?.message || 'Failed to load result');
-      } finally { setLoading(false); }
+        if (cancelled) return;
+        if (!cachedPayload) setError(err?.response?.data?.message || 'Failed to load result');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
+
     run();
-  }, [sessionId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchResultPayload, resultCacheKey, sessionId, writeResultCache]);
 
   useEffect(() => {
     const selectionFrozen  = Boolean(data?.selectionFrozen);
@@ -170,22 +248,24 @@ export const ResultPage = () => {
     const timer = setInterval(async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
-        const res = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-        setData(res.data);
-        const payloadStatus = String(res?.data?.match?.status || '').toUpperCase();
-        if (String(res?.data?.matchState || '').toUpperCase() !== 'UPCOMING' || payloadStatus === 'COMPLETED') setError('');
+        const payload = await fetchResultPayload();
+        setData(payload);
+        writeResultCache(payload);
+        const payloadStatus = String(payload?.match?.status || '').toUpperCase();
+        if (String(payload?.matchState || '').toUpperCase() !== 'UPCOMING' || payloadStatus === 'COMPLETED') setError('');
         setRefreshMeta((prev) => ({ ...(prev || {}), lastRefreshedAt: new Date().toISOString() }));
       } catch { /* ignore polling failures */ }
     }, AUTO_REFRESH_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [data?.selectionFrozen, isCompleted, sessionId]);
+  }, [data?.selectionFrozen, fetchResultPayload, isCompleted, sessionId, writeResultCache]);
 
   const onFixFriendPoints = async () => {
     setError(''); setInfo(''); setFixing(true);
     try {
       await axiosInstance.post(`/api/scoring/session/${sessionId}/calculate?force=true`);
-      const again = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-      setData(again.data);
+      const payload = await fetchResultPayload();
+      setData(payload);
+      writeResultCache(payload);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to recalculate');
     } finally { setFixing(false); }
@@ -218,8 +298,9 @@ export const ResultPage = () => {
         scorecardState:   resp?.data?.scorecardState  || null,
         scorecardStatus:  resp?.data?.scorecardStatus || null,
       });
-      const again = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-      setData(again.data);
+      const payload = await fetchResultPayload();
+      setData(payload);
+      writeResultCache(payload);
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to refresh stats');
     } finally { setRefreshing(false); }
@@ -229,8 +310,9 @@ export const ResultPage = () => {
     setError(''); setInfo(''); setFreezingSelection(true);
     try {
       await axiosInstance.post(`/api/player-selections/freeze/${sessionId}`);
-      const again = await axiosInstance.get(`/api/history/match/${sessionId}?t=${Date.now()}`);
-      setData(again.data);
+      const payload = await fetchResultPayload();
+      setData(payload);
+      writeResultCache(payload);
       setInfo('Selection frozen. Auto scoring is now enabled.');
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to freeze selection');

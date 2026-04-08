@@ -9,6 +9,11 @@ import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh
 
 const HISTORY_COMPLETION_CHECK_LIMIT = Number(process.env.HISTORY_COMPLETION_CHECK_LIMIT || 5);
 
+const isTruthyQueryFlag = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes';
+};
+
 const buildSelectionSummary = (selection) => {
   const userPlayers =
     Array.isArray(selection?.userPlayers) && selection.userPlayers.length > 0
@@ -55,6 +60,7 @@ const tryAutoRefreshSessionScore = async ({ sessionId, userId, selection }) => {
 export const getHistoryByRuleSet = async (req, res, next) => {
   try {
     const { friendId, rulesetId } = req.params;
+    const skipAutoRefresh = isTruthyQueryFlag(req.query.skipAutoRefresh);
 
     if (!mongoose.Types.ObjectId.isValid(friendId)) {
       return res.status(400).json({ message: 'Invalid friendId' });
@@ -74,7 +80,7 @@ export const getHistoryByRuleSet = async (req, res, next) => {
       .select('_id')
       .lean();
 
-    if (sessionsToCheck.length > 0) {
+    if (!skipAutoRefresh && sessionsToCheck.length > 0) {
       const checkIds = sessionsToCheck.map((s) => s._id);
       const checkSelections = await PlayerSelection.find({ sessionId: { $in: checkIds } })
         .select('sessionId isFrozen')
@@ -129,6 +135,7 @@ export const getHistoryByRuleSet = async (req, res, next) => {
 export const getMatchResult = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
+    const skipAutoRefresh = isTruthyQueryFlag(req.query.skipAutoRefresh);
 
     if (!mongoose.Types.ObjectId.isValid(sessionId)) {
       return res.status(400).json({ message: 'Invalid sessionId' });
@@ -140,11 +147,13 @@ export const getMatchResult = async (req, res, next) => {
     }
 
     const selection = await PlayerSelection.findOne({ sessionId }).lean();
-    const autoRefreshed = await tryAutoRefreshSessionScore({
-      sessionId,
-      userId: req.userId,
-      selection,
-    });
+    const autoRefreshed = skipAutoRefresh
+      ? null
+      : await tryAutoRefreshSessionScore({
+          sessionId,
+          userId: req.userId,
+          selection,
+        });
     const effectiveSession =
       autoRefreshed?.matchStatus === 'COMPLETED' && session?.status !== 'COMPLETED'
         ? {

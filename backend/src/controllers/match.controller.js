@@ -388,6 +388,7 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 	try {
 		const { friendId } = req.params;
 		const onlyFrozen = String(req.query.onlyFrozen ?? 'true').toLowerCase() !== 'false';
+		const skipAutoRefresh = isTruthyQueryFlag(req.query.skipAutoRefresh);
 		const includePointsDebug = shouldIncludePointsDebug(req);
 
 		if (!mongoose.Types.ObjectId.isValid(friendId)) {
@@ -408,11 +409,13 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
 		);
 
-		const completionUpdated = await autoRefreshCompletionForSessions({
-			sessions,
-			selectionBySessionId,
-			userId: req.userId,
-		});
+		const completionUpdated = skipAutoRefresh
+			? false
+			: await autoRefreshCompletionForSessions({
+				sessions,
+				selectionBySessionId,
+				userId: req.userId,
+			});
 
 		if (completionUpdated) {
 			sessions = await MatchSession.find({ userId: req.userId, friendId })
@@ -449,6 +452,7 @@ export const getMatchSessionsByRuleSet = async (req, res, next) => {
 	try {
 		const { rulesetId } = req.params;
 		const onlyFrozen = String(req.query.onlyFrozen ?? 'true').toLowerCase() !== 'false';
+		const skipAutoRefresh = isTruthyQueryFlag(req.query.skipAutoRefresh);
 		const includePointsDebug = shouldIncludePointsDebug(req);
 
 		if (!mongoose.Types.ObjectId.isValid(rulesetId)) {
@@ -466,11 +470,13 @@ export const getMatchSessionsByRuleSet = async (req, res, next) => {
 			selections.map((s) => [String(s.sessionId), buildSelectionSummary(s)])
 		);
 
-		const completionUpdated = await autoRefreshCompletionForSessions({
-			sessions,
-			selectionBySessionId,
-			userId: req.userId,
-		});
+		const completionUpdated = skipAutoRefresh
+			? false
+			: await autoRefreshCompletionForSessions({
+				sessions,
+				selectionBySessionId,
+				userId: req.userId,
+			});
 
 		if (completionUpdated) {
 			sessions = await MatchSession.find({ userId: req.userId, rulesetId }).lean();

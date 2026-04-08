@@ -9,6 +9,8 @@ import Layout from '../components/Layout.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { copyToClipboard } from '../utils/copyToClipboard.js';
 
+const FRIEND_DETAIL_CACHE_TTL_MS = 2 * 60 * 1000;
+
 const toNumber = (value) => {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
@@ -117,6 +119,7 @@ export const FriendDetailPage = () => {
   const { friendId } = useParams();
   const location     = useLocation();
   const { user }     = useAuth();
+  const cacheKey     = useMemo(() => `friendDetailCacheV1_${friendId}`, [friendId]);
 
   const [friend, setFriend]               = useState(null);
   const [sessions, setSessions]           = useState([]);
@@ -148,24 +151,112 @@ export const FriendDetailPage = () => {
   }, [friendStats, userDisplayName, friendName]);
 
   useEffect(() => {
-    const run = async () => {
-      setError(''); setFriendViewLink(''); setLoading(true);
+    let cancelled = false;
+
+    const readCache = () => {
       try {
-        const [friendsRes, sessionsRes, shareRes] = await Promise.all([
-          axiosInstance.get('/api/friends'),
-          axiosInstance.get(`/api/matches/friend/${friendId}?onlyFrozen=false&_ts=${Date.now()}`),
-          axiosInstance.get(`/api/share/friend-view/${friendId}`).catch(() => null),
-        ]);
-        const friends = friendsRes.data || [];
-        setFriend(friends.find((f) => f._id === friendId) || null);
-        setSessions(sessionsRes.data || []);
-        setFriendViewLink(shareRes?.data?.url || '');
-      } catch (err) {
-        setError(err?.response?.data?.message || 'Failed to load friend details');
-      } finally { setLoading(false); }
+        const raw = sessionStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - Number(parsed?.ts || 0);
+        if (age < 0 || age > FRIEND_DETAIL_CACHE_TTL_MS) return null;
+        return parsed?.data || null;
+      } catch {
+        return null;
+      }
     };
+
+    const writeCache = (nextData) => {
+      try {
+        sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: nextData }));
+      } catch {
+        // ignore cache write errors
+      }
+    };
+
+    const cachedData = readCache();
+    if (cachedData) {
+      setFriend(cachedData.friend || null);
+      setSessions(Array.isArray(cachedData.sessions) ? cachedData.sessions : []);
+      setFriendViewLink(cachedData.friendViewLink || '');
+      setLoading(false);
+    }
+
+    const run = async () => {
+      setError('');
+      if (!cachedData) setLoading(true);
+      try {
+        const [friendsRes, sessionsRes] = await Promise.all([
+          axiosInstance.get('/api/friends'),
+          axiosInstance.get(`/api/matches/friend/${friendId}?onlyFrozen=false&skipAutoRefresh=1&_ts=${Date.now()}`),
+        ]);
+        if (cancelled) return;
+
+        const friends = friendsRes.data || [];
+        const nextFriend = friends.find((f) => String(f?._id) === String(friendId)) || null;
+        const nextSessions = sessionsRes.data || [];
+        let latestShareLink = cachedData?.friendViewLink || '';
+
+        setFriend(nextFriend);
+        setSessions(nextSessions);
+
+        writeCache({
+          friend: nextFriend,
+          sessions: nextSessions,
+          friendViewLink: latestShareLink,
+        });
+
+        // Fetch share link without blocking first render.
+        void axiosInstance
+          .get(`/api/share/friend-view/${friendId}`)
+          .then((shareRes) => {
+            if (cancelled) return;
+            const nextLink = shareRes?.data?.url || '';
+            if (!nextLink) return;
+            latestShareLink = nextLink;
+            setFriendViewLink(nextLink);
+            writeCache({
+              friend: nextFriend,
+              sessions: nextSessions,
+              friendViewLink: nextLink,
+            });
+          })
+          .catch(() => {});
+
+        const hasActiveSessions = nextSessions.some((s) => {
+          const status = String(s?.status || '').toUpperCase();
+          return status !== 'COMPLETED' && !s?.playedAt;
+        });
+
+        // Revalidate in background only when live/pending sessions exist.
+        if (hasActiveSessions) {
+          void axiosInstance
+            .get(`/api/matches/friend/${friendId}?onlyFrozen=false&_ts=${Date.now()}`)
+            .then((freshRes) => {
+              if (cancelled) return;
+              const refreshedSessions = freshRes?.data || [];
+              setSessions(refreshedSessions);
+              writeCache({
+                friend: nextFriend,
+                sessions: refreshedSessions,
+                friendViewLink: latestShareLink,
+              });
+            })
+            .catch(() => {});
+        }
+      } catch (err) {
+        if (cancelled) return;
+        if (!cachedData) setError(err?.response?.data?.message || 'Failed to load friend details');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     run();
-  }, [friendId, location.key]);
+    return () => {
+      cancelled = true;
+    };
+  }, [cacheKey, friendId, location.key]);
 
   const onDeleteSession = async (session) => {
     const sessionId = session?._id;
@@ -190,7 +281,7 @@ export const FriendDetailPage = () => {
       if (!url) {
         const res = await axiosInstance.get(`/api/share/friend-view/${friendId}`);
         url = res?.data?.url || '';
-        if (url) { setFriendViewLink(url); setInfo('Link is ready. Tap copy again.'); return; }
+        if (url) setFriendViewLink(url);
       }
       if (!url) { setError('Unable to generate friend view link'); return; }
       const copied = await copyToClipboard(url);

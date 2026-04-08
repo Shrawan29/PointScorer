@@ -48,18 +48,20 @@ export const SelectFriend = () => {
 			setLoading(true);
 			setError('');
 			try {
-				const friendsRes = await axiosInstance.get('/api/friends');
+				const needsMatchLookup = Boolean(matchId && !location?.state?.match);
+				const friendsRequest = axiosInstance.get('/api/friends');
+				const matchLookupRequest = needsMatchLookup
+					? Promise.all([
+						axiosInstance.get('/api/cricket/matches'),
+						axiosInstance.get('/api/cricket/matches/upcoming').catch(() => ({ data: [] })),
+					])
+					: Promise.resolve(null);
+
+				const [friendsRes, matchLookupRes] = await Promise.all([friendsRequest, matchLookupRequest]);
 				if (!cancelled) setFriends(friendsRes.data || []);
 
-				// If we already have match data from navigation, don't re-fetch.
-				if (!matchId || location?.state?.match) return;
-
-				// Fallback: look up match from Cricbuzz lists.
-				const [todayRes, upcomingRes] = await Promise.all([
-					axiosInstance.get('/api/cricket/matches'),
-					axiosInstance.get('/api/cricket/matches/upcoming').catch(() => ({ data: [] })),
-				]);
-
+				if (!needsMatchLookup || !matchLookupRes) return;
+				const [todayRes, upcomingRes] = matchLookupRes;
 				const list = [...(todayRes.data || []), ...(upcomingRes.data || [])];
 				const picked = list.find((m) => String(m?.matchUrl || '').includes(`/${matchId}/`));
 				if (!cancelled) setMatch(picked || null);

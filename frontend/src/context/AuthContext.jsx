@@ -50,6 +50,7 @@ export const AuthProvider = ({ children }) => {
     () => ({
       user,
       token,
+      isAuthenticated: Boolean(token),
       login,
       logout,
     }),

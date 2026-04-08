@@ -308,22 +308,33 @@ export const PlayerSelectionPage = () => {
     const loadedSession = sessionRes.data || null;
     setSession(loadedSession);
     setSelection(selectionRes.data || null);
-    try {
-      const rid = loadedSession?.rulesetId;
-      if (rid) {
-        const rulesetRes = await axiosInstance.get(`/api/rulesets/${rid}`);
-        setCaptainEnabled(isCaptainMultiplierEnabled(rulesetRes.data));
-      } else setCaptainEnabled(false);
-    } catch { setCaptainEnabled(false); }
-    try {
-      const fid = loadedSession?.friendId;
-      if (fid) {
-        const friendsRes = await axiosInstance.get('/api/friends');
-        const list = friendsRes.data || [];
-        const fr = list.find((f) => String(f?._id) === String(fid));
-        setFriendName(fr?.friendName || 'Friend');
-      }
-    } catch { setFriendName('Friend'); }
+
+    const rid = loadedSession?.rulesetId;
+    const fid = loadedSession?.friendId;
+    const realMatchId = loadedSession?.realMatchId;
+
+    const [rulesetRes, friendsRes, squadsRes] = await Promise.all([
+      rid ? axiosInstance.get(`/api/rulesets/${rid}`).catch(() => null) : Promise.resolve(null),
+      fid ? axiosInstance.get('/api/friends').catch(() => null) : Promise.resolve(null),
+      realMatchId
+        ? axiosInstance
+            .get(`/api/cricket/matches/${realMatchId}/squads`, {
+              params: { team1Name: loadedSession?.team1 || undefined, team2Name: loadedSession?.team2 || undefined },
+            })
+            .catch(() => null)
+        : Promise.resolve(null),
+    ]);
+
+    setCaptainEnabled(isCaptainMultiplierEnabled(rulesetRes?.data));
+    if (friendsRes?.data && fid) {
+      const list = friendsRes.data || [];
+      const fr = list.find((f) => String(f?._id) === String(fid));
+      setFriendName(fr?.friendName || 'Friend');
+    } else {
+      setFriendName('Friend');
+    }
+    setSquads(squadsRes?.data || null);
+
     const s = selectionRes.data;
     const up = Array.isArray(s?.userPlayers) && s.userPlayers.length > 0 ? s.userPlayers : s?.selectedPlayers || [];
     const fp = s?.friendPlayers || [];
@@ -331,15 +342,6 @@ export const PlayerSelectionPage = () => {
     setFriendPlayers(uniquePlayers(fp));
     setUserCaptain(s?.userCaptain || s?.captain || '');
     setFriendCaptain(s?.friendCaptain || '');
-    const realMatchId = loadedSession?.realMatchId;
-    if (realMatchId) {
-      try {
-        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${realMatchId}/squads`, {
-          params: { team1Name: loadedSession?.team1 || undefined, team2Name: loadedSession?.team2 || undefined },
-        });
-        setSquads(squadsRes.data || null);
-      } catch { setSquads(null); }
-    }
   };
 
   useEffect(() => {

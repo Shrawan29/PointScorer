@@ -34,7 +34,18 @@ if (import.meta.env.DEV) {
 
 export const axiosInstance = axios.create({
   baseURL,
+  timeout: 15000,
 });
+
+const isAuthFlowEndpoint = (url) => {
+  const path = String(url || '').toLowerCase();
+  return (
+    path.includes('/api/auth/login') ||
+    path.includes('/api/auth/register') ||
+    path.includes('/api/auth/request-password-reset') ||
+    path.includes('/api/auth/force-logout-other-session')
+  );
+};
 
 axiosInstance.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
@@ -49,7 +60,9 @@ axiosInstance.interceptors.response.use(
   (response) => response,
   (error) => {
     const status = error?.response?.status;
-    if (status === 401) {
+    const requestUrl = error?.config?.url;
+    const hasToken = Boolean(localStorage.getItem('token'));
+    if (status === 401 && hasToken && !isAuthFlowEndpoint(requestUrl)) {
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     return Promise.reject(error);

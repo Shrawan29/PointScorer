@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -39,40 +40,43 @@ const PublicOnlyRoute = ({ children }) => {
 
 export const App = () => {
 	return (
-		<Routes>
-			<Route path="/" element={<RootRedirect />} />
-			<Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
-			<Route path="/register" element={<PublicOnlyRoute><RegisterPage /></PublicOnlyRoute>} />
-			<Route path="/request-password-reset" element={<PublicOnlyRoute><RequestPasswordResetPage /></PublicOnlyRoute>} />
-			<Route path="/friend-view/:token" element={<FriendPublicHomePage />} />
-			<Route path="/friend-view/:token/sessions/:sessionId/result" element={<FriendPublicResultPage />} />
-			<Route path="/friend-view/:token/sessions/:sessionId/breakdown" element={<FriendPublicBreakdownPage />} />
+		<>
+			<Routes>
+				<Route path="/" element={<RootRedirect />} />
+				<Route path="/login" element={<PublicOnlyRoute><LoginPage /></PublicOnlyRoute>} />
+				<Route path="/register" element={<PublicOnlyRoute><RegisterPage /></PublicOnlyRoute>} />
+				<Route path="/request-password-reset" element={<PublicOnlyRoute><RequestPasswordResetPage /></PublicOnlyRoute>} />
+				<Route path="/friend-view/:token" element={<FriendPublicHomePage />} />
+				<Route path="/friend-view/:token/sessions/:sessionId/result" element={<FriendPublicResultPage />} />
+				<Route path="/friend-view/:token/sessions/:sessionId/breakdown" element={<FriendPublicBreakdownPage />} />
 
-			<Route element={<ProtectedRoute />}>
-				<Route path="/dashboard" element={<DashboardPage />} />
-				<Route path="/change-password" element={<ChangePasswordPage />} />
-				<Route path="/admin" element={<AdminDashboard />} />
-				<Route path="/matches/:matchId" element={<MatchDetails />} />
-				<Route path="/select-friend/:matchId" element={<SelectFriend />} />
-				<Route path="/friends" element={<FriendsListPage />} />
-				<Route path="/friends/:friendId" element={<FriendDetailPage />} />
+				<Route element={<ProtectedRoute />}>
+					<Route path="/dashboard" element={<DashboardPage />} />
+					<Route path="/change-password" element={<ChangePasswordPage />} />
+					<Route path="/admin" element={<AdminDashboard />} />
+					<Route path="/matches/:matchId" element={<MatchDetails />} />
+					<Route path="/select-friend/:matchId" element={<SelectFriend />} />
+					<Route path="/friends" element={<FriendsListPage />} />
+					<Route path="/friends/:friendId" element={<FriendDetailPage />} />
 
-				<Route path="/rulesets/new-template" element={<RulesetCreatePage />} />
-				<Route path="/friends/:friendId/rulesets" element={<RulesetListPage />} />
-				<Route path="/friends/:friendId/rulesets/new" element={<RulesetCreatePage />} />
-				<Route path="/friends/:friendId/rulesets/:rulesetId" element={<RulesetDetailPage />} />
+					<Route path="/rulesets/new-template" element={<RulesetCreatePage />} />
+					<Route path="/friends/:friendId/rulesets" element={<RulesetListPage />} />
+					<Route path="/friends/:friendId/rulesets/new" element={<RulesetCreatePage />} />
+					<Route path="/friends/:friendId/rulesets/:rulesetId" element={<RulesetDetailPage />} />
 
-				<Route path="/friends/:friendId/matches/new" element={<MatchCreatePage />} />
+					<Route path="/friends/:friendId/matches/new" element={<MatchCreatePage />} />
 
-				<Route path="/sessions/:sessionId/selection" element={<PlayerSelectionPage />} />
-				<Route path="/player-selection/:sessionId" element={<PlayerSelectionPage />} />
-				<Route path="/sessions/:sessionId/result" element={<ResultPage />} />
-				<Route path="/sessions/:sessionId/breakdown" element={<BreakdownPage />} />
-				<Route path="/sessions/:sessionId/share" element={<SharePage />} />
-			</Route>
+					<Route path="/sessions/:sessionId/selection" element={<PlayerSelectionPage />} />
+					<Route path="/player-selection/:sessionId" element={<PlayerSelectionPage />} />
+					<Route path="/sessions/:sessionId/result" element={<ResultPage />} />
+					<Route path="/sessions/:sessionId/breakdown" element={<BreakdownPage />} />
+					<Route path="/sessions/:sessionId/share" element={<SharePage />} />
+				</Route>
 
-			<Route path="*" element={<NotFoundPage />} />
-		</Routes>
+				<Route path="*" element={<NotFoundPage />} />
+			</Routes>
+			<Analytics />
+		</>
 	);
 };
 

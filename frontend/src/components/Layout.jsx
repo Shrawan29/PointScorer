@@ -17,7 +17,7 @@ export const Layout = ({ children }) => {
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80">
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 pt-3 pb-2.5">
+        <div className="mx-auto w-full max-w-5xl flex items-center justify-between px-3 sm:px-4 pt-3 pb-2.5">
           <Link to="/" className="flex items-center gap-2 text-[16px] font-semibold text-slate-900">
             <span className="w-[7px] h-[7px] rounded-full bg-[var(--brand)] inline-block" />
             PointScorer
@@ -47,7 +47,7 @@ export const Layout = ({ children }) => {
         </div>
 
         {/* Nav */}
-        <div className="px-3 pb-2 overflow-x-auto scrollbar-hide">
+        <div className="mx-auto w-full max-w-5xl px-3 sm:px-4 pb-2 overflow-x-auto scrollbar-hide">
           <nav className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100/90 p-[3px] w-fit">
             <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
             <NavLink to="/friends" className={navLinkClass}>Friends</NavLink>
@@ -59,7 +59,7 @@ export const Layout = ({ children }) => {
 
       </header>
 
-      <main className="flex-1 w-full max-w-lg mx-auto px-3 py-3">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
         {children}
       </main>
     </div>

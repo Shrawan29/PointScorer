@@ -1,8 +1,51 @@
 import mongoose from 'mongoose';
+import axios from 'axios';
 import app from './src/app.js';
 import ENV from './src/config/env.js';
 import { startMatchPollingJob } from './src/jobs/matchPolling.job.js';
 import { startStatsPollingJob } from './src/jobs/statsPolling.job.js';
+
+let selfPingTimer = null;
+
+const startSelfPing = () => {
+  if (!ENV.SELF_PING_ENABLED) {
+    return;
+  }
+
+  if (!ENV.SELF_PING_BASE_URL) {
+    console.warn('[SelfPing] Disabled: SELF_PING_BASE_URL/RENDER_EXTERNAL_URL is missing.');
+    return;
+  }
+
+  const baseUrl = ENV.SELF_PING_BASE_URL.replace(/\/$/, '');
+  const path = ENV.SELF_PING_PATH.startsWith('/')
+    ? ENV.SELF_PING_PATH
+    : `/${ENV.SELF_PING_PATH}`;
+  const pingUrl = `${baseUrl}${path}`;
+  const intervalMs = ENV.SELF_PING_INTERVAL_MINUTES * 60 * 1000;
+
+  const ping = async () => {
+    try {
+      await axios.get(pingUrl, {
+        timeout: ENV.SELF_PING_TIMEOUT_MS,
+        headers: {
+          'User-Agent': 'pointscorer-self-ping/1.0',
+        },
+      });
+      console.log(`[SelfPing] OK ${pingUrl}`);
+    } catch (error) {
+      console.warn(`[SelfPing] Failed ${pingUrl}: ${error.message}`);
+    }
+  };
+
+  // Prime once shortly after boot, then continue at the configured cadence.
+  setTimeout(ping, 30_000);
+  selfPingTimer = setInterval(ping, intervalMs);
+
+  console.log(
+    `[SelfPing] Enabled every ${ENV.SELF_PING_INTERVAL_MINUTES} min -> ${pingUrl}`,
+  );
+};
 
 const startServer = async () => {
   try {
@@ -13,6 +56,7 @@ const startServer = async () => {
 	app.listen(port, host, () => {
 		console.log(`Server running on ${host}:${port}`);
 		console.log(`[Env] PORT=${process.env.PORT || ''} HOST=${process.env.HOST || ''}`);
+    startSelfPing();
 	});
 
     let jobsStarted = false;
@@ -47,6 +91,14 @@ const startServer = async () => {
 
     process.on('unhandledRejection', (reason, promise) => {
       console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+    });
+
+    process.on('SIGTERM', () => {
+      if (selfPingTimer) clearInterval(selfPingTimer);
+    });
+
+    process.on('SIGINT', () => {
+      if (selfPingTimer) clearInterval(selfPingTimer);
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);

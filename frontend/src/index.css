@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -17,15 +17,23 @@
   --brand-strong: #103f74;
   --ring: rgba(20, 75, 139, 0.2);
 }
-
+ 
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: 'Manrope', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: "Manrope", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color: var(--text-primary);
   background:
-    radial-gradient(950px 520px at 0% -16%, rgba(188, 210, 240, 0.28), transparent 66%),
-    radial-gradient(740px 440px at 100% -28%, rgba(199, 220, 244, 0.25), transparent 64%),
+    radial-gradient(
+      950px 520px at 0% -16%,
+      rgba(188, 210, 240, 0.28),
+      transparent 66%
+    ),
+    radial-gradient(
+      740px 440px at 100% -28%,
+      rgba(199, 220, 244, 0.25),
+      transparent 64%
+    ),
     linear-gradient(180deg, var(--bg-canvas) 0%, #f7f9fc 100%);
 }
 
@@ -37,7 +45,7 @@ h1,
 h2,
 h3,
 .font-display {
-  font-family: 'Sora', 'Manrope', sans-serif;
+  font-family: "Sora", "Manrope", sans-serif;
 }
 
 * {
@@ -58,17 +66,20 @@ a {
 }
 
 @layer base {
-  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select,
   textarea {
     border: 1px solid var(--stroke);
     border-radius: 0.75rem;
     background: var(--surface);
     color: var(--text-primary);
-    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      background-color 0.15s ease;
   }
 
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):disabled,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):disabled,
   select:disabled,
   textarea:disabled {
     background: #eef2f7;
@@ -76,7 +87,7 @@ a {
     cursor: not-allowed;
   }
 
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
   select:focus,
   textarea:focus {
     border-color: var(--brand);
@@ -119,7 +130,11 @@ a {
 @media (max-width: 640px) {
   body {
     background:
-      radial-gradient(760px 420px at 0% -20%, rgba(188, 210, 240, 0.3), transparent 66%),
+      radial-gradient(
+        760px 420px at 0% -20%,
+        rgba(188, 210, 240, 0.3),
+        transparent 66%
+      ),
       linear-gradient(180deg, #f7f9fc 0%, #f8fafd 100%);
   }
 

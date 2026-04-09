@@ -12,6 +12,36 @@ const TYPE_T20 = 'T20';
 const TYPE_ODI = 'ODI';
 const TYPE_TEST = 'TEST';
 const TYPE_IPL = 'IPL';
+const CACHE_TTL_MS = 7200000;
+
+const readCachedMatches = (cacheKey) => {
+  const sources = [sessionStorage, localStorage];
+  for (const store of sources) {
+    try {
+      const cachedRaw = store.getItem(cacheKey);
+      if (!cachedRaw) continue;
+      const cached = JSON.parse(cachedRaw);
+      const age = Date.now() - Number(cached?.ts || 0);
+      if (age >= 0 && age < CACHE_TTL_MS && cached?.data) {
+        return cached;
+      }
+    } catch {
+      // ignore malformed cache entries
+    }
+  }
+  return null;
+};
+
+const writeCachedMatches = (cacheKey, data) => {
+  const serialized = JSON.stringify({ ts: Date.now(), data });
+  try { sessionStorage.setItem(cacheKey, serialized); } catch { /* ignore */ }
+  try { localStorage.setItem(cacheKey, serialized); } catch { /* ignore */ }
+};
+
+const clearCachedMatches = (cacheKey) => {
+  try { sessionStorage.removeItem(cacheKey); } catch { /* ignore */ }
+  try { localStorage.removeItem(cacheKey); } catch { /* ignore */ }
+};
 
 const normalizeType = (value) => {
   if (!value) return null;
@@ -158,11 +188,9 @@ export const DashboardMatches = () => {
     if (bypassBackendCache) upcomingParams.push('nocache=1');
     const upcomingUrl = `/api/cricket/matches/upcoming${upcomingParams.length ? `?${upcomingParams.join('&')}` : ''}`;
 
-    let todayArray = [];
-    let upcomingArray = [];
     const errors = [];
 
-    const todayRequest = axiosInstance
+    const todayArray = await axiosInstance
       .get(todayUrl)
       .then((res) => (Array.isArray(res?.data) ? res.data : []))
       .catch((e) => {
@@ -170,7 +198,12 @@ export const DashboardMatches = () => {
         return [];
       });
 
-    const upcomingRequest = Promise.race([
+    const todayMatches = todayArray.map((m) => normalizeMatch(m, TAB_TODAY));
+    if (typeof onPartialData === 'function') {
+      onPartialData({ todayMatches });
+    }
+
+    const upcomingArray = await Promise.race([
       axiosInstance.get(upcomingUrl),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 8000)),
     ])
@@ -179,14 +212,6 @@ export const DashboardMatches = () => {
         errors.push(e?.response?.data?.message || 'Failed to load upcoming matches');
         return [];
       });
-
-    todayArray = await todayRequest;
-    const todayMatches = todayArray.map((m) => normalizeMatch(m, TAB_TODAY));
-    if (typeof onPartialData === 'function') {
-      onPartialData({ todayMatches });
-    }
-
-    upcomingArray = await upcomingRequest;
     const upcomingMatches = upcomingArray.map((m) => normalizeMatch(m, TAB_UPCOMING));
     return { nextData: { todayMatches, upcomingMatches }, errors };
   };
@@ -203,43 +228,35 @@ export const DashboardMatches = () => {
     }
     try {
       if (useCache) {
-        const cachedRaw = sessionStorage.getItem(cacheKey);
-        if (cachedRaw) {
-          try {
-            const cached = JSON.parse(cachedRaw);
-            const age = Date.now() - Number(cached?.ts || 0);
-            if (age >= 0 && age < 7200000 && cached?.data) {
-              const today = Array.isArray(cached?.data?.todayMatches) ? cached.data.todayMatches : [];
-              const upcoming = Array.isArray(cached?.data?.upcomingMatches) ? cached.data.upcomingMatches : [];
-              const all = [...today, ...upcoming];
-              const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
-              if (requestSeqRef.current === reqId) setData(cached.data);
-              if (hasMissingType && requestedType === TYPE_ALL) {
-                void (async () => {
-                  try {
-                    const res = await fetchMatchesFromApi({
-                      bypassBackendCache: false,
-                      includeIplSeason,
-                      requestedType,
-                      onPartialData: (partialData) => {
-                        if (requestSeqRef.current !== reqId) return;
-                        setData((prev) => ({ ...prev, ...partialData }));
-                      },
-                    });
+        const cached = readCachedMatches(cacheKey);
+        if (cached?.data) {
+          const today = Array.isArray(cached?.data?.todayMatches) ? cached.data.todayMatches : [];
+          const upcoming = Array.isArray(cached?.data?.upcomingMatches) ? cached.data.upcomingMatches : [];
+          const all = [...today, ...upcoming];
+          const hasMissingType = all.length > 0 && all.some((m) => !m?.matchType);
+          if (requestSeqRef.current === reqId) setData(cached.data);
+          if (hasMissingType && requestedType === TYPE_ALL) {
+            void (async () => {
+              try {
+                const res = await fetchMatchesFromApi({
+                  bypassBackendCache: false,
+                  includeIplSeason,
+                  requestedType,
+                  onPartialData: (partialData) => {
                     if (requestSeqRef.current !== reqId) return;
-                    setData(res.nextData);
-                    try {
-                      sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: res.nextData }));
-                    } catch { /* ignore */ }
-                  } catch { /* ignore */ }
-                })();
-              }
-              return;
-            }
-          } catch { /* ignore */ }
+                    setData((prev) => ({ ...prev, ...partialData }));
+                  },
+                });
+                if (requestSeqRef.current !== reqId) return;
+                setData(res.nextData);
+                writeCachedMatches(cacheKey, res.nextData);
+              } catch { /* ignore */ }
+            })();
+          }
+          return;
         }
       } else {
-        try { sessionStorage.removeItem(cacheKey); } catch { /* ignore */ }
+        clearCachedMatches(cacheKey);
       }
 
       const { nextData, errors } = await fetchMatchesFromApi({
@@ -253,9 +270,7 @@ export const DashboardMatches = () => {
       });
       if (requestSeqRef.current !== reqId) return;
       setData(nextData);
-      try {
-        sessionStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: nextData }));
-      } catch { /* ignore */ }
+      writeCachedMatches(cacheKey, nextData);
       if (errors.length > 0 && nextData.todayMatches.length === 0 && nextData.upcomingMatches.length === 0) {
         setError(errors[0]);
       }

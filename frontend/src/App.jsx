@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
@@ -76,6 +77,7 @@ export const App = () => {
 				<Route path="*" element={<NotFoundPage />} />
 			</Routes>
 			<Analytics />
+			<SpeedInsights />
 		</>
 	);
 };

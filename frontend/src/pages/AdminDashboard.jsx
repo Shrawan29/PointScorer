@@ -8,6 +8,7 @@ import Layout from '../components/Layout';
 import PageHeader from '../components/PageHeader';
 import Card from '../components/Card';
 import FormField from '../components/FormField';
+import AdminUserFriendCounts from '../components/AdminUserFriendCounts';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -29,6 +30,29 @@ const validateName = (name) => {
   if (!name || name.trim().length < 2) return 'Name must be at least 2 characters';
   if (name.trim().length > 100) return 'Name must not exceed 100 characters';
   return '';
+};
+
+const toSafeNumber = (value, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const normalizeAdminUser = (rawUser, existingUser = null) => {
+  const safeUser = rawUser || {};
+
+  return {
+    ...(existingUser || {}),
+    ...safeUser,
+    _id: String(safeUser._id || safeUser.id || existingUser?._id || ''),
+    maxFriendsAllowed: toSafeNumber(
+      safeUser.maxFriendsAllowed,
+      toSafeNumber(existingUser?.maxFriendsAllowed, 10)
+    ),
+    friendsCreatedCount: toSafeNumber(
+      safeUser.friendsCreatedCount,
+      toSafeNumber(existingUser?.friendsCreatedCount, 0)
+    ),
+  };
 };
 
 const AdminDashboard = () => {
@@ -82,7 +106,8 @@ const AdminDashboard = () => {
       setLoading(true);
       setError('');
       const response = await axiosInstance.get('/api/admin/users');
-      setUsers(response.data);
+      const safeRows = Array.isArray(response.data) ? response.data : [];
+      setUsers(safeRows.map((row) => normalizeAdminUser(row)));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch users');
     } finally {
@@ -104,9 +129,10 @@ const AdminDashboard = () => {
 
   // Filter and paginate users
   const filteredUsers = useMemo(() => {
+    const normalizedQuery = searchQuery.toLowerCase();
     return users.filter(u =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase())
+      String(u?.name || '').toLowerCase().includes(normalizedQuery) ||
+      String(u?.email || '').toLowerCase().includes(normalizedQuery)
     );
   }, [users, searchQuery]);
 
@@ -150,7 +176,10 @@ const AdminDashboard = () => {
       setError('');
       const response = await axiosInstance.post('/api/admin/users/create', formData);
       setSuccess('User created successfully');
-      setUsers([response.data.user, ...users]);
+      setUsers((prev) => [
+        normalizeAdminUser({ ...(response.data?.user || {}), friendsCreatedCount: 0 }),
+        ...prev,
+      ]);
       setFormData({
         name: '',
         email: '',
@@ -168,12 +197,14 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleToggleBlock = async (userId, currentBlockStatus) => {
+  const handleToggleBlock = async (userId) => {
     try {
       setBlockingUserId(userId);
       const response = await axiosInstance.patch(`/api/admin/users/${userId}/toggle-block`);
       setSuccess(response.data.message);
-      setUsers(users.map(u => u._id === userId ? response.data.user : u));
+      setUsers((prev) => prev.map((u) => (
+        u._id === userId ? normalizeAdminUser(response.data?.user, u) : u
+      )));
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update user');
@@ -183,17 +214,20 @@ const AdminDashboard = () => {
   };
 
   const handleUpdateMaxFriends = async (userId) => {
-    if (isNaN(editingFriendsValue) || parseInt(editingFriendsValue) < 1 || parseInt(editingFriendsValue) > 100) {
+    const parsedFriendsLimit = parseInt(editingFriendsValue, 10);
+    if (Number.isNaN(parsedFriendsLimit) || parsedFriendsLimit < 1 || parsedFriendsLimit > 100) {
       setError('Please enter a valid number between 1 and 100');
       return;
     }
 
     try {
       const response = await axiosInstance.put(`/api/admin/users/${userId}`, {
-        maxFriendsAllowed: parseInt(editingFriendsValue),
+        maxFriendsAllowed: parsedFriendsLimit,
       });
       setSuccess('Max friends updated successfully');
-      setUsers(users.map(u => u._id === userId ? response.data.user : u));
+      setUsers((prev) => prev.map((u) => (
+        u._id === userId ? normalizeAdminUser(response.data?.user, u) : u
+      )));
       setEditingFriendsLimit(null);
       setEditingFriendsValue('');
       setTimeout(() => setSuccess(''), 3000);
@@ -220,7 +254,7 @@ const AdminDashboard = () => {
       setDeletingUserId(userId);
       await axiosInstance.delete(`/api/admin/users/${userId}`);
       setSuccess('User deleted successfully');
-      setUsers(users.filter(u => u._id !== userId));
+      setUsers((prev) => prev.filter((u) => u._id !== userId));
       setCurrentPage(1);
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
@@ -425,6 +459,8 @@ const AdminDashboard = () => {
       )}
     </Card>
 
+      <AdminUserFriendCounts users={users} />
+
         {/* Users List */}
         <Card title="All Users">
           {users.length > 0 && (
@@ -491,12 +527,12 @@ const AdminDashboard = () => {
                         </div>
                       ) : (
                         <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
-                          <div className="text-slate-600">Friends</div>
+                          <div className="text-slate-600">Friend limit</div>
                           <div className="font-semibold text-slate-900">{u.maxFriendsAllowed}</div>
                           <button
                             onClick={() => {
                               setEditingFriendsLimit(u._id);
-                              setEditingFriendsValue(u.maxFriendsAllowed);
+                              setEditingFriendsValue(String(u.maxFriendsAllowed));
                             }}
                             className="mt-1 rounded-md bg-[var(--brand)] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[var(--brand-strong)]"
                           >
@@ -504,6 +540,11 @@ const AdminDashboard = () => {
                           </button>
                         </div>
                       )}
+
+                      <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
+                        <div className="text-slate-600">Friends made</div>
+                        <div className="font-semibold text-slate-900">{u.friendsCreatedCount || 0}</div>
+                      </div>
 
                       <div className="text-center px-2 py-1 rounded text-xs font-semibold">
                         {u.isAdmin ? (
@@ -524,7 +565,7 @@ const AdminDashboard = () => {
 
                     <div className="flex gap-2 sm:flex-col">
                       <Button
-                        onClick={() => handleToggleBlock(u._id, u.isBlocked)}
+                        onClick={() => handleToggleBlock(u._id)}
                         disabled={blockingUserId === u._id}
                         className={`flex-1 text-xs py-1 ${
                           u.isBlocked

@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import User from '../models/User.model.js';
+import Friend from '../models/Friend.model.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.model.js';
 
 // Validation utilities
@@ -39,8 +40,28 @@ const validateMaxFriends = (max) => {
 // Get all users (admin only)
 export const getAllUsers = async (req, res, next) => {
   try {
-    const users = await User.find({}).select('-password').sort({ createdAt: -1 });
-    return res.status(200).json(users);
+    const [users, friendCounts] = await Promise.all([
+      User.find({}).select('-password').sort({ createdAt: -1 }).lean(),
+      Friend.aggregate([
+        {
+          $group: {
+            _id: '$userId',
+            friendsCreatedCount: { $sum: 1 },
+          },
+        },
+      ]),
+    ]);
+
+    const friendCountByUserId = new Map(
+      friendCounts.map((row) => [String(row._id), Number(row.friendsCreatedCount) || 0])
+    );
+
+    const usersWithFriendCount = users.map((row) => ({
+      ...row,
+      friendsCreatedCount: friendCountByUserId.get(String(row._id)) || 0,
+    }));
+
+    return res.status(200).json(usersWithFriendCount);
   } catch (error) {
     next(error);
   }

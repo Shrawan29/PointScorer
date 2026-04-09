@@ -7,6 +7,7 @@
     "start": "vite",
     "dev": "vite",
     "dev:lan": "vite --host 0.0.0.0 --port 5173",
+    "postinstall": "node scripts/ensure-speed-insights-tsconfig.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "preview:lan": "vite preview --host 0.0.0.0 --port 5173"

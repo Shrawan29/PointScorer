@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
@@ -78,14 +78,44 @@ const getPlayersByTeam = (squads) => {
   return grouped;
 };
 
-// ── Primitives ───────────────────────────────────────────────────────────────
+// ── Countdown hook ────────────────────────────────────────────────────────────
+// Accepts the server-reported secondsToExpire whenever it refreshes,
+// then ticks down locally every second so the display is always live.
+const useCountdown = (serverSeconds) => {
+  const [remaining, setRemaining] = useState(null);
+  const seedRef = useRef(null);
 
-const StatCell = ({ label, value, valueClass = '' }) => (
-  <div className="flex flex-col gap-0.5 px-3 py-1.5 border-r border-b border-slate-100 last:border-r-0 [&:nth-last-child(-n+2)]:border-b-0 [&:nth-child(2n)]:border-r-0">
-    <span className="text-[10px] text-slate-400 leading-tight">{label}</span>
-    <span className={`text-[12px] font-medium text-slate-900 leading-tight ${valueClass}`}>{value}</span>
-  </div>
-);
+  useEffect(() => {
+    if (typeof serverSeconds !== 'number') {
+      setRemaining(null);
+      return;
+    }
+    // Re-seed from server value each time it changes
+    setRemaining(serverSeconds);
+    seedRef.current = serverSeconds;
+
+    const timer = setInterval(() => {
+      setRemaining((prev) => {
+        if (prev === null || prev <= 0) return 0;
+        return prev - 1;
+      });
+    }, 1_000);
+
+    return () => clearInterval(timer);
+  }, [serverSeconds]);
+
+  return remaining;
+};
+
+const formatCountdown = (secs) => {
+  if (secs === null || secs === undefined) return null;
+  const s = Math.max(0, Math.round(secs));
+  const m = Math.floor(s / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return `${m}:${ss}`;
+};
+
+// ── Primitives ────────────────────────────────────────────────────────────────
 
 const PlayerTag = ({ name, variant = 'mine' }) => {
   const cls =
@@ -99,7 +129,15 @@ const PlayerTag = ({ name, variant = 'mine' }) => {
   );
 };
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+// Inline key-value row used inside the compact status card
+const StatusRow = ({ label, children }) => (
+  <div className="flex items-center justify-between gap-2 py-1 border-b border-slate-100 last:border-b-0">
+    <span className="text-[10.5px] text-slate-400 shrink-0">{label}</span>
+    <span className="text-[11px] font-medium text-slate-800 text-right">{children}</span>
+  </div>
+);
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export const LiveRoomPage = () => {
   const { roomId } = useParams();
@@ -113,6 +151,10 @@ export const LiveRoomPage = () => {
   const [captainChoice, setCaptainChoice] = useState('');
   const [liveRealtimeConnected, setLiveRealtimeConnected] = useState(false);
   const [search, setSearch] = useState('');
+
+  const countdown = useCountdown(
+    typeof room?.secondsToExpire === 'number' ? room.secondsToExpire : undefined,
+  );
 
   const loadRoom = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -290,6 +332,9 @@ export const LiveRoomPage = () => {
     } finally { setBusy(false); }
   };
 
+  const countdownDisplay = formatCountdown(countdown);
+  const countdownUrgent = typeof countdown === 'number' && countdown <= 30;
+
   return (
     <Layout>
       {/* Page header */}
@@ -327,11 +372,13 @@ export const LiveRoomPage = () => {
             </div>
           )}
 
-          {/* Status card — compact */}
+          {/* ── Compact status card ── */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
-              <span className="text-[11.5px] font-medium text-slate-700">Room status</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
+
+            {/* Single header row: title + status badge + countdown */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100">
+              <span className="text-[11px] font-medium text-slate-600 shrink-0">Status</span>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${
                 status === 'FROZEN'
                   ? 'bg-slate-100 text-slate-600 border-slate-200'
                   : status === 'CAPTAIN'
@@ -342,45 +389,65 @@ export const LiveRoomPage = () => {
               }`}>
                 {status || 'UNKNOWN'}
               </span>
+              {countdownDisplay !== null && !isTerminal && (
+                <span className={`ml-auto text-[11px] font-medium tabular-nums shrink-0 ${
+                  countdownUrgent ? 'text-red-500' : 'text-slate-500'
+                }`}>
+                  {countdownDisplay}
+                </span>
+              )}
             </div>
 
-            {/* 2-col stat grid — compact rows */}
-            <div className="grid grid-cols-2">
-              <StatCell label="Role" value={meRole || '—'} />
-              <StatCell
-                label="Your turn"
-                value={room?.myTurn ? 'Yes' : 'No'}
-                valueClass={room?.myTurn ? 'text-emerald-600' : ''}
-              />
-              <StatCell
-                label="You"
-                value={room?.meReady ? 'Ready' : 'Not ready'}
-                valueClass={room?.meReady ? 'text-emerald-600' : 'text-slate-400'}
-              />
-              <StatCell
-                label="Opponent"
-                value={room?.counterpartReady ? 'Ready' : 'Not ready'}
-                valueClass={room?.counterpartReady ? 'text-emerald-600' : 'text-slate-400'}
-              />
-              <StatCell label="Picks" value={`H ${hostCount}/9 · G ${guestCount}/9`} />
-              {!isTerminal && draftLockEligible ? (
-                <StatCell
-                  label="Locks"
-                  value={`You ${meLocked ? '🔒' : '–'} · Opp ${counterpartLocked ? '🔒' : '–'}`}
-                  valueClass={bothLocked ? 'text-emerald-600' : meLocked ? 'text-amber-600' : ''}
-                />
-              ) : <div />}
+            {/* Compact key-value rows */}
+            <div className="px-3 py-1.5">
+              <StatusRow label="Role">
+                <span className="text-slate-700">{meRole || '—'}</span>
+              </StatusRow>
+
+              <StatusRow label="Turn / Ready">
+                <span className={room?.myTurn ? 'text-emerald-600' : 'text-slate-400'}>
+                  {room?.myTurn ? 'Your turn' : 'Waiting'}
+                </span>
+                <span className="text-slate-300 mx-1">·</span>
+                <span className={room?.meReady ? 'text-emerald-600' : 'text-slate-400'}>
+                  {room?.meReady ? 'Ready' : 'Not ready'}
+                </span>
+                <span className="text-slate-300 mx-1">·</span>
+                <span className="text-slate-400">Opp </span>
+                <span className={room?.counterpartReady ? 'text-emerald-600' : 'text-slate-400'}>
+                  {room?.counterpartReady ? 'Ready' : '–'}
+                </span>
+              </StatusRow>
+
+              <StatusRow label="Picks">
+                H {hostCount}/9 · G {guestCount}/9
+                {draftLockEligible && (
+                  <span className="ml-1.5 text-[10px] text-emerald-600 font-normal">(lock eligible)</span>
+                )}
+              </StatusRow>
+
+              {!isTerminal && draftLockEligible && (
+                <StatusRow label="Locks">
+                  <span className={meLocked ? 'text-emerald-600' : 'text-amber-500'}>
+                    You {meLocked ? '✓' : 'pending'}
+                  </span>
+                  <span className="text-slate-300 mx-1">·</span>
+                  <span className={counterpartLocked ? 'text-emerald-600' : 'text-slate-400'}>
+                    Opp {counterpartLocked ? '✓' : 'pending'}
+                  </span>
+                </StatusRow>
+              )}
+
+              {captainRequired && (
+                <StatusRow label="Captains">
+                  H: <span className="text-slate-700 ml-0.5">{room?.hostCaptain || '–'}</span>
+                  <span className="text-slate-300 mx-1">·</span>
+                  G: <span className="text-slate-700">{room?.guestCaptain || '–'}</span>
+                </StatusRow>
+              )}
             </div>
 
-            {captainRequired && (
-              <div className="px-3 py-1.5 border-t border-slate-100 text-[10.5px] text-slate-500">
-                Captains — Host: <span className="text-slate-700">{room?.hostCaptain || 'Pending'}</span>
-                {' · '}
-                Guest: <span className="text-slate-700">{room?.guestCaptain || 'Pending'}</span>
-              </div>
-            )}
-
-            {/* Contextual hint */}
+            {/* Contextual hint strip */}
             {canLockSelection && (
               <div className={`px-3 py-1.5 border-t text-[10.5px] ${
                 bothLocked
@@ -409,11 +476,6 @@ export const LiveRoomPage = () => {
             {status === 'EXPIRED' && (
               <div className="px-3 py-1.5 border-t border-amber-100 bg-amber-50 text-[10.5px] text-amber-700">
                 Room expired due to timeout.
-              </div>
-            )}
-            {!isTerminal && typeof room?.secondsToExpire === 'number' && (
-              <div className="px-3 py-1.5 border-t border-slate-100 text-[10.5px] text-slate-400">
-                Expires in {room.secondsToExpire}s
               </div>
             )}
           </div>
@@ -522,11 +584,9 @@ export const LiveRoomPage = () => {
                     : `No players match "${search}".`}
                 </div>
               ) : (
-                /* ↓ stacked on mobile, side-by-side on md+ */
                 <div className="grid gap-3 md:grid-cols-2">
                   {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
                     <div key={teamName} className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col">
-                      {/* Team header — sticky within the card */}
                       <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 bg-slate-50/80 sticky top-0 z-10">
                         <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-medium text-white shrink-0">
                           {teamIndex + 1}
@@ -536,8 +596,6 @@ export const LiveRoomPage = () => {
                           {players.length}p
                         </span>
                       </div>
-
-                      {/* Scrollable player list */}
                       <div className="overflow-y-auto max-h-60 divide-y divide-slate-50">
                         {players.map((p) => {
                           const key = normalizePlayer(p).toLowerCase();

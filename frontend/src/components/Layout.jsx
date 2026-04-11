@@ -62,29 +62,30 @@ export const Layout = ({ children }) => {
       <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80">
 
         {/* Top bar */}
-        <div className="mx-auto w-full max-w-5xl flex items-center justify-between px-3 sm:px-4 pt-3 pb-2.5">
-          <Link to="/" className="flex items-center gap-2 text-[16px] font-semibold text-slate-900">
-            <span className="w-[7px] h-[7px] rounded-full bg-[var(--brand)] inline-block" />
-            PointScorer
+        <div className="mx-auto w-full max-w-5xl flex flex-col gap-2 px-3 sm:px-4 pt-3 pb-2.5 sm:flex-row sm:items-center sm:justify-between">
+          <Link to="/" className="flex min-w-0 items-center gap-2 text-[15px] sm:text-[16px] font-semibold text-slate-900">
+            <span className="w-[7px] h-[7px] rounded-full bg-[var(--brand)] inline-block shrink-0" />
+            <span className="truncate">PointScorer</span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:gap-2">
             <Link
               to="/live-friends"
-              className={`h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+              className={`h-8 px-2 inline-flex items-center gap-1.5 rounded-lg border text-[10px] sm:text-[11px] font-semibold transition-colors whitespace-nowrap ${
                 activeRoomsCount > 0
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                   : 'border-slate-200 bg-slate-50 text-slate-600'
               }`}
               title="Active rooms currently running"
             >
-              <span>Active Rooms</span>
+              <span className="sm:hidden">Rooms</span>
+              <span className="hidden sm:inline">Active Rooms</span>
               <span className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-full border border-current/25 px-1 text-[10px] font-bold leading-none">
                 {activeRoomsCount}
               </span>
             </Link>
             <Link
               to="/dashboard?showUpdate=1"
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
+              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-[13px] sm:text-[14px] text-slate-500 hover:bg-slate-200 transition-colors"
               title="Read update guide"
               aria-label="Read update guide"
             >
@@ -92,7 +93,7 @@ export const Layout = ({ children }) => {
             </Link>
             <Link
               to="/change-password"
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
+              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
               title="Change password"
             >
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
@@ -103,7 +104,7 @@ export const Layout = ({ children }) => {
             <button
               type="button"
               onClick={logout}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
+              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
               title="Log out"
             >
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">

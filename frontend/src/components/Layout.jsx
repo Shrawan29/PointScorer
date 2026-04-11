@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
-
 import axiosInstance from '../api/axiosInstance.js';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const navLinkClass = ({ isActive }) =>
-  `h-[30px] px-3.5 inline-flex items-center rounded-lg text-[13px] font-semibold whitespace-nowrap border transition-colors ${
+  `h-[28px] px-3 inline-flex items-center gap-1.5 rounded-[9px] text-[12.5px] font-medium whitespace-nowrap border transition-colors ${
     isActive
       ? 'bg-[var(--brand)] text-white border-[var(--brand)]'
       : 'text-slate-500 border-transparent hover:text-slate-900 hover:bg-white hover:border-slate-200'
@@ -25,7 +24,6 @@ export const Layout = ({ children }) => {
           axiosInstance.get('/api/presence/friends').catch(() => ({ data: {} })),
           axiosInstance.get('/api/live-rooms').catch(() => ({ data: [] })),
         ]);
-
         if (cancelled) return;
 
         const activeFriendsFromCount = Number(presenceRes?.data?.onlineCount);
@@ -40,102 +38,107 @@ export const Layout = ({ children }) => {
         setActiveFriendsCount(Math.max(0, nextActiveFriendsCount));
         setActiveRoomsCount(Math.max(0, roomRows.length));
       } catch {
-        // ignore transient summary refresh failures
+        // ignore transient failures
       }
     };
 
     void loadSummary();
-
     const timer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void loadSummary();
     }, 15_000);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
+    return () => { cancelled = true; clearInterval(timer); };
   }, []);
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200/80">
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200/70">
 
-        {/* Top bar */}
-        <div className="mx-auto w-full max-w-5xl flex flex-col gap-2 px-3 sm:px-4 pt-3 pb-2.5 sm:flex-row sm:items-center sm:justify-between">
-          <Link to="/" className="flex min-w-0 items-center gap-2 text-[15px] sm:text-[16px] font-semibold text-slate-900">
-            <span className="w-[7px] h-[7px] rounded-full bg-[var(--brand)] inline-block shrink-0" />
-            <span className="truncate">PointScorer</span>
-          </Link>
-          <div className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:gap-2">
+        <div className="mx-auto w-full max-w-5xl px-4 sm:px-5 pt-2.5 pb-0">
+
+          {/* Top bar */}
+          <div className="flex items-center justify-between gap-3 mb-2">
             <Link
-              to="/live-friends"
-              className={`h-8 px-2 inline-flex items-center gap-1.5 rounded-lg border text-[10px] sm:text-[11px] font-semibold transition-colors whitespace-nowrap ${
-                activeRoomsCount > 0
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                  : 'border-slate-200 bg-slate-50 text-slate-600'
-              }`}
-              title="Active rooms currently running"
+              to="/"
+              className="flex items-center gap-2 text-[15px] font-medium text-slate-900 truncate shrink-0"
             >
-              <span className="sm:hidden">Rooms</span>
-              <span className="hidden sm:inline">Active Rooms</span>
-              <span className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-full border border-current/25 px-1 text-[10px] font-bold leading-none">
-                {activeRoomsCount}
-              </span>
+              <span className="w-[7px] h-[7px] rounded-full bg-[var(--brand)] shrink-0" />
+              PointScorer
             </Link>
-            <Link
-              to="/dashboard?showUpdate=1"
-              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-[13px] sm:text-[14px] text-slate-500 hover:bg-slate-200 transition-colors"
-              title="Read update guide"
-              aria-label="Read update guide"
-            >
-              i
-            </Link>
-            <Link
-              to="/change-password"
-              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
-              title="Change password"
-            >
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
-                <circle cx="8" cy="5" r="3" />
-                <path d="M2 14c0-3.3 2.7-5 6-5s6 1.7 6 5" />
-              </svg>
-            </Link>
-            <button
-              type="button"
-              onClick={logout}
-              className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 transition-colors"
-              title="Log out"
-            >
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M10 3h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-3M6 11l4-3-4-3M2 8h8" />
-              </svg>
-            </button>
+
+            <div className="flex items-center gap-1.5">
+              {/* Active rooms — lives up here with the other utility controls */}
+              <Link
+                to="/live-friends"
+                title="Active rooms currently running"
+                className={`h-[30px] px-2.5 inline-flex items-center gap-1.5 rounded-lg border text-[11.5px] font-medium transition-colors whitespace-nowrap ${
+                  activeRoomsCount > 0
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-slate-200 bg-slate-100 text-slate-500'
+                }`}
+              >
+                Active Rooms
+                <span className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-black/[0.07] px-1 text-[10px] font-bold leading-none">
+                  {activeRoomsCount}
+                </span>
+              </Link>
+
+              <span className="w-px h-4 bg-slate-200 mx-0.5" />
+
+              <Link
+                to="/dashboard?showUpdate=1"
+                title="Read update guide"
+                aria-label="Read update guide"
+                className="w-[30px] h-[30px] flex items-center justify-center rounded-lg bg-slate-100 border border-slate-200 text-[12px] font-medium text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+              >
+                i
+              </Link>
+
+              <Link
+                to="/change-password"
+                title="Change password"
+                className="w-[30px] h-[30px] flex items-center justify-center rounded-lg bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+                  <circle cx="8" cy="5" r="3" />
+                  <path d="M2 14c0-3.3 2.7-5 6-5s6 1.7 6 5" />
+                </svg>
+              </Link>
+
+              <button
+                type="button"
+                onClick={logout}
+                title="Log out"
+                className="w-[30px] h-[30px] flex items-center justify-center rounded-lg bg-slate-100 border border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 3h3a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-3M6 11l4-3-4-3M2 8h8" />
+                </svg>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Nav */}
-        <div className="mx-auto w-full max-w-5xl px-3 sm:px-4 pb-2 overflow-x-auto scrollbar-hide">
-          <nav className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100/90 p-[3px] w-fit">
-            <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
-            <NavLink to="/friends" className={navLinkClass}>Friends</NavLink>
-            <NavLink to="/live-friends" className={navLinkClass}>
-              <span className="inline-flex items-center gap-1.5">
+          {/* Nav */}
+          <div className="overflow-x-auto scrollbar-hide pb-2.5">
+            <nav className="inline-flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-100/80 p-[3px] w-fit">
+              <NavLink to="/dashboard" className={navLinkClass}>Dashboard</NavLink>
+              <NavLink to="/friends" className={navLinkClass}>Friends</NavLink>
+              <NavLink to="/live-friends" className={navLinkClass}>
                 <span>Active Friends</span>
-                <span className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-full border border-current/25 px-1 text-[10px] font-bold leading-none">
+                <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-current/10 px-1 text-[10px] font-bold leading-none">
                   {activeFriendsCount}
                 </span>
-              </span>
-            </NavLink>
-            {user?.isAdmin && (
-              <NavLink to="/admin" className={navLinkClass}>Admin</NavLink>
-            )}
-          </nav>
-        </div>
+              </NavLink>
+              {user?.isAdmin && (
+                <NavLink to="/admin" className={navLinkClass}>Admin</NavLink>
+              )}
+            </nav>
+          </div>
 
+        </div>
       </header>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-4 py-3 sm:py-5">
+      <main className="flex-1 w-full max-w-5xl mx-auto px-4 sm:px-5 py-4 sm:py-6">
         {children}
       </main>
     </div>

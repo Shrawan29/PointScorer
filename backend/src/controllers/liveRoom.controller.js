@@ -15,6 +15,13 @@ const MAX_PLAYERS_PER_TEAM = 9;
 const MIN_PLAYERS_PER_TEAM = 6;
 const FIXED_LIVE_ROOM_TTL_SECONDS = 5 * 60;
 const LIVE_ACTIVE_STATES = ['LOBBY', 'DRAFTING', 'CAPTAIN'];
+const LIVE_ROOM_OPTIONS_MATCH_CACHE_TTL_MS = 30_000;
+
+let liveRoomOptionsMatchCache = {
+  expiresAt: 0,
+  matches: [],
+};
+let liveRoomOptionsMatchCachePromise = null;
 
 const getLiveRoomTtlSeconds = () => FIXED_LIVE_ROOM_TTL_SECONDS;
 
@@ -259,6 +266,60 @@ const mapMatch = (m) => {
   };
 };
 
+const loadLiveRoomOptionMatches = async () => {
+  const now = Date.now();
+  if (
+    Array.isArray(liveRoomOptionsMatchCache.matches) &&
+    liveRoomOptionsMatchCache.matches.length > 0 &&
+    liveRoomOptionsMatchCache.expiresAt > now
+  ) {
+    return liveRoomOptionsMatchCache.matches;
+  }
+
+  if (liveRoomOptionsMatchCachePromise) {
+    return liveRoomOptionsMatchCachePromise;
+  }
+
+  liveRoomOptionsMatchCachePromise = (async () => {
+    try {
+      const [todayAndLive, upcoming] = await Promise.all([
+        scrapeTodayAndLiveMatches().catch(() => []),
+        scrapeUpcomingMatches().catch(() => []),
+      ]);
+
+      const allMatches = [
+        ...(Array.isArray(todayAndLive) ? todayAndLive : []),
+        ...(Array.isArray(upcoming) ? upcoming : []),
+      ]
+        .map(mapMatch)
+        .filter((m) => m.matchId && m.matchName);
+
+      const dedup = new Map();
+      for (const m of allMatches) {
+        const key = String(m.matchId);
+        if (!dedup.has(key)) dedup.set(key, m);
+      }
+
+      const matches = Array.from(dedup.values());
+      liveRoomOptionsMatchCache = {
+        expiresAt: Date.now() + LIVE_ROOM_OPTIONS_MATCH_CACHE_TTL_MS,
+        matches,
+      };
+
+      return matches;
+    } catch (error) {
+      if (Array.isArray(liveRoomOptionsMatchCache.matches) && liveRoomOptionsMatchCache.matches.length > 0) {
+        return liveRoomOptionsMatchCache.matches;
+      }
+      return [];
+    } finally {
+      liveRoomOptionsMatchCachePromise = null;
+    }
+  })();
+
+  return liveRoomOptionsMatchCachePromise;
+};
+
 const getRoomResponse = ({ room, requesterUserId }) => {
   const data = toObject(room);
   const context = resolveParticipantContext({ room: data, userId: requesterUserId });
@@ -449,7 +510,7 @@ export const getLiveRoomOptions = async (req, res, next) => {
 
     markUserOnline(req.userId);
 
-    const [ruleSets, todayAndLive, upcoming] = await Promise.all([
+    const [ruleSets, cachedMatches] = await Promise.all([
       RuleSet.find({
         userId: relation.hostUserId,
         friendId: relation.friend._id,
@@ -457,19 +518,8 @@ export const getLiveRoomOptions = async (req, res, next) => {
         .sort({ createdAt: -1 })
         .select('_id rulesetName')
         .lean(),
-      scrapeTodayAndLiveMatches().catch(() => []),
-      scrapeUpcomingMatches().catch(() => []),
+      loadLiveRoomOptionMatches(),
     ]);
-
-    const allMatches = [...(Array.isArray(todayAndLive) ? todayAndLive : []), ...(Array.isArray(upcoming) ? upcoming : [])]
-      .map(mapMatch)
-      .filter((m) => m.matchId && m.matchName);
-
-    const dedup = new Map();
-    for (const m of allMatches) {
-      const key = String(m.matchId);
-      if (!dedup.has(key)) dedup.set(key, m);
-    }
 
     const counterpartPresence = getUserPresence(
       relation.relationType === 'HOST_VIEW' ? relation.guestUserId : relation.hostUserId
@@ -498,7 +548,7 @@ export const getLiveRoomOptions = async (req, res, next) => {
       activeRoomId: activeRoom?._id ? String(activeRoom._id) : null,
       activeRoomStatus: activeRoom?.status || null,
       rulesets: ruleSets,
-      matches: Array.from(dedup.values()),
+      matches: Array.isArray(cachedMatches) ? cachedMatches : [],
     });
   } catch (error) {
     next(error);

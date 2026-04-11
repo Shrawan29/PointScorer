@@ -154,6 +154,8 @@ export const LiveRoomPage = () => {
   const [search, setSearch] = useState('');
   const requestedExpiryRefreshRef = useRef(false);
   const oneMinuteNoticeSentRef = useRef(false);
+  const squadsCacheRef = useRef(new Map());
+  const squadsRequestMatchIdRef = useRef('');
 
   const countdown = useCountdown(
     typeof room?.secondsToExpire === 'number' ? room.secondsToExpire : undefined,
@@ -166,10 +168,6 @@ export const LiveRoomPage = () => {
       const payload = res?.data || null;
       setRoom(payload);
       setError('');
-      if (payload?.realMatchId) {
-        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${payload.realMatchId}/squads`);
-        setSquads(squadsRes?.data || null);
-      }
     } catch (err) {
       setError(err?.response?.data?.message || 'Failed to load live room');
     } finally {
@@ -216,6 +214,45 @@ export const LiveRoomPage = () => {
     }, ROOM_POLL_MS);
     return () => clearInterval(timer);
   }, [liveRealtimeConnected, loadRoom]);
+
+  useEffect(() => {
+    const matchId = String(room?.realMatchId || '').trim();
+    if (!matchId) {
+      squadsRequestMatchIdRef.current = '';
+      setSquads(null);
+      return;
+    }
+
+    const cachedSquads = squadsCacheRef.current.get(matchId);
+    if (cachedSquads) {
+      squadsRequestMatchIdRef.current = matchId;
+      setSquads(cachedSquads);
+      return;
+    }
+
+    squadsRequestMatchIdRef.current = matchId;
+    setSquads(null);
+    let cancelled = false;
+
+    const run = async () => {
+      try {
+        const squadsRes = await axiosInstance.get(`/api/cricket/matches/${matchId}/squads`);
+        const payload = squadsRes?.data || null;
+        if (cancelled || squadsRequestMatchIdRef.current !== matchId) return;
+        squadsCacheRef.current.set(matchId, payload);
+        setSquads(payload);
+      } catch (_error) {
+        if (cancelled || squadsRequestMatchIdRef.current !== matchId) return;
+        setSquads(null);
+      }
+    };
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.realMatchId]);
 
   const meRole = room?.meRole;
   const myPlayers = useMemo(

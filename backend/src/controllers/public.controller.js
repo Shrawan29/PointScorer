@@ -8,6 +8,7 @@ import User from '../models/User.model.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
 import { buildDetailedBreakdownForSessionId } from '../services/breakdown.service.js';
 import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh.service.js';
+import { getFriendInviteByToken } from '../services/friendInvite.service.js';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -461,9 +462,30 @@ export const refreshFriendPublicSession = async (req, res, next) => {
 	}
 };
 
+export const getLiveInvitePreview = async (req, res, next) => {
+	try {
+		const { token } = req.params;
+		const friend = await getFriendInviteByToken(token);
+		const host = await User.findById(friend.userId)
+			.select('name email')
+			.lean();
+
+		return res.status(200).json({
+			friendId: String(friend._id),
+			friendName: friend.friendName,
+			hostName: host?.name || host?.email || 'User',
+			expiresAt: friend.liveInviteExpiresAt,
+			alreadyLinked: Boolean(friend.linkedUserId),
+		});
+	} catch (error) {
+		next(error);
+	}
+};
+
 export default {
 	getFriendPublicView,
 	getFriendPublicMatchResult,
 	getFriendPublicMatchBreakdown,
 	refreshFriendPublicSession,
+	getLiveInvitePreview,
 };

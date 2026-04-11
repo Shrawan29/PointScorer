@@ -41,6 +41,14 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 10,
     },
+    canManageFriends: {
+      type: Boolean,
+      default: true,
+    },
+    seenUpdateVersions: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );

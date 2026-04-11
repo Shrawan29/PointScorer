@@ -3,6 +3,10 @@ import mongoose from 'mongoose';
 import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import RuleSet from '../models/RuleSet.model.js';
+import { orientSelectionForViewer, resolveSessionViewerAccess } from '../services/sessionAccess.service.js';
+
+const MIN_TEAM_SIZE = 6;
+const MAX_TEAM_SIZE = 9;
 
 const isCaptainMultiplierEnabled = (ruleSet) => {
   const rules = Array.isArray(ruleSet?.rules) ? ruleSet.rules : [];
@@ -123,8 +127,15 @@ export const createOrUpdateSelection = async (req, res, next) => {
       return res.status(400).json({ message: 'A player cannot be selected in both teams' });
     }
 
-    if (safeUserPlayers.length === 0) {
-      return res.status(400).json({ message: 'Select at least one player for your team' });
+    if (
+      safeUserPlayers.length < MIN_TEAM_SIZE ||
+      safeUserPlayers.length > MAX_TEAM_SIZE ||
+      safeFriendPlayers.length < MIN_TEAM_SIZE ||
+      safeFriendPlayers.length > MAX_TEAM_SIZE
+    ) {
+      return res.status(400).json({
+        message: `Both teams must have between ${MIN_TEAM_SIZE} and ${MAX_TEAM_SIZE} players`,
+      });
     }
 
     const finalUserCaptain = captainEnabled ? safeUserCaptain : null;
@@ -202,6 +213,24 @@ export const freezeSelection = async (req, res, next) => {
       return res.status(404).json({ message: 'MatchSession not found' });
     }
 
+    const existingSelection = await PlayerSelection.findOne({ sessionId });
+    if (!existingSelection) {
+      return res.status(404).json({ message: 'PlayerSelection not found' });
+    }
+
+    const safeUserPlayers = uniqueSelectionPlayers(existingSelection.userPlayers || existingSelection.selectedPlayers || []);
+    const safeFriendPlayers = uniqueSelectionPlayers(existingSelection.friendPlayers || []);
+    if (
+      safeUserPlayers.length < MIN_TEAM_SIZE ||
+      safeUserPlayers.length > MAX_TEAM_SIZE ||
+      safeFriendPlayers.length < MIN_TEAM_SIZE ||
+      safeFriendPlayers.length > MAX_TEAM_SIZE
+    ) {
+      return res.status(409).json({
+        message: `Both teams must have between ${MIN_TEAM_SIZE} and ${MAX_TEAM_SIZE} players before freezing`,
+      });
+    }
+
     const frozen = await PlayerSelection.findOneAndUpdate(
       { sessionId, isFrozen: false },
       { $set: { isFrozen: true } },
@@ -226,40 +255,41 @@ export const freezeSelection = async (req, res, next) => {
 export const getSelectionBySession = async (req, res, next) => {
   try {
     const { sessionId } = req.params;
-
-    if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-      return res.status(400).json({ message: 'Invalid sessionId' });
-    }
-
-    const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId });
-    if (!session) {
-      return res.status(404).json({ message: 'MatchSession not found' });
-    }
+    const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
 
     const selection = await PlayerSelection.findOne({ sessionId });
     if (!selection) {
       return res.status(404).json({ message: 'PlayerSelection not found' });
     }
 
+    const orientedSelection = orientSelectionForViewer({
+      selection,
+      viewerRole: access.viewerRole,
+    });
+
 	// Backfill new fields for older records (best-effort)
-	if ((!selection.userPlayers || selection.userPlayers.length === 0) && Array.isArray(selection.selectedPlayers)) {
-		selection.userPlayers = selection.selectedPlayers;
-		selection.userCaptain = selection.userCaptain || selection.captain || null;
+	if ((!orientedSelection.userPlayers || orientedSelection.userPlayers.length === 0) && Array.isArray(orientedSelection.selectedPlayers)) {
+		orientedSelection.userPlayers = orientedSelection.selectedPlayers;
+		orientedSelection.userCaptain = orientedSelection.userCaptain || orientedSelection.captain || null;
 	}
 
-    selection.userPlayers = uniqueSelectionPlayers(selection.userPlayers);
-    selection.friendPlayers = uniqueSelectionPlayers(selection.friendPlayers);
-    selection.selectedPlayers = uniqueSelectionPlayers(selection.selectedPlayers?.length ? selection.selectedPlayers : selection.userPlayers);
+    orientedSelection.userPlayers = uniqueSelectionPlayers(orientedSelection.userPlayers);
+    orientedSelection.friendPlayers = uniqueSelectionPlayers(orientedSelection.friendPlayers);
+    orientedSelection.selectedPlayers = uniqueSelectionPlayers(
+      orientedSelection.selectedPlayers?.length
+        ? orientedSelection.selectedPlayers
+        : orientedSelection.userPlayers
+    );
 
-    if (selection.userCaptain && !includesPlayer(selection.userPlayers, selection.userCaptain)) {
-      selection.userCaptain = null;
+    if (orientedSelection.userCaptain && !includesPlayer(orientedSelection.userPlayers, orientedSelection.userCaptain)) {
+      orientedSelection.userCaptain = null;
     }
-    if (selection.friendCaptain && !includesPlayer(selection.friendPlayers, selection.friendCaptain)) {
-      selection.friendCaptain = null;
+    if (orientedSelection.friendCaptain && !includesPlayer(orientedSelection.friendPlayers, orientedSelection.friendCaptain)) {
+      orientedSelection.friendCaptain = null;
     }
-    selection.captain = selection.userCaptain || null;
+    orientedSelection.captain = orientedSelection.userCaptain || null;
 
-    return res.status(200).json(selection);
+    return res.status(200).json(orientedSelection);
   } catch (error) {
     next(error);
   }

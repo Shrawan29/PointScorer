@@ -106,7 +106,7 @@ export const FriendPublicBreakdownPage = () => {
 				</div>
 
 				{error && <Alert type="error">{error}</Alert>}
-				{info && <Alert type="success">{info}</Alert>}
+				{info && <Alert type="success" floating>{info}</Alert>}
 
 				{loading ? (
 					<div className="text-sm text-slate-600">Loading...</div>

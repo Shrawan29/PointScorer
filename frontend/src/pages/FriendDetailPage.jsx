@@ -62,7 +62,16 @@ const StatBox = ({ label, value }) => (
 );
 
 // ── Session card ──────────────────────────────────────────────────────────────
-const SessionCard = ({ s, userDisplayName, friendName, deletingId, onDeleteSession, showResult, isPending }) => {
+const SessionCard = ({
+  s,
+  userDisplayName,
+  friendName,
+  deletingId,
+  onDeleteSession,
+  showResult,
+  isPending,
+  canDelete,
+}) => {
   const displayStatus = getEffectiveStatus(s);
   const scoreSummary  = getMatchScoreSummary(s, userDisplayName, friendName);
 
@@ -77,24 +86,26 @@ const SessionCard = ({ s, userDisplayName, friendName, deletingId, onDeleteSessi
           </span>
         </div>
         {/* Trash icon button — no red, just a quiet slate icon */}
-        <button
-          type="button"
-          disabled={deletingId === String(s._id)}
-          onClick={() => onDeleteSession(s)}
-          className="shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600 hover:border-slate-300 disabled:opacity-40 transition-colors"
-          title="Delete session"
-        >
-          {deletingId === String(s._id) ? (
-            <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-            </svg>
-          ) : (
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          )}
-        </button>
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={deletingId === String(s._id)}
+            onClick={() => onDeleteSession(s)}
+            className="shrink-0 mt-0.5 w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600 hover:border-slate-300 disabled:opacity-40 transition-colors"
+            title="Delete session"
+          >
+            {deletingId === String(s._id) ? (
+              <svg className="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+                <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </button>
+        ) : null}
       </div>
 
       {/* Score row */}
@@ -129,9 +140,24 @@ export const FriendDetailPage = () => {
   const [loading, setLoading]             = useState(false);
   const [deletingId, setDeletingId]       = useState('');
   const [copyingLink, setCopyingLink]     = useState(false);
+  const [copyingLiveInvite, setCopyingLiveInvite] = useState(false);
   const [friendViewLink, setFriendViewLink] = useState('');
 
   const friendName      = useMemo(() => friend?.friendName || friendId, [friend, friendId]);
+  const connectedUserName = useMemo(() => friend?.hostDisplayName || '', [friend]);
+  const isGuestFriendView = useMemo(() => String(friend?.relationType || '') === 'GUEST_VIEW', [friend]);
+  const counterpartDisplayName = useMemo(
+    () => (isGuestFriendView ? connectedUserName || 'User' : friendName),
+    [isGuestFriendView, connectedUserName, friendName]
+  );
+  const titleDisplayName = useMemo(
+    () => (isGuestFriendView ? counterpartDisplayName : friendName),
+    [isGuestFriendView, counterpartDisplayName, friendName]
+  );
+  const canManageThisFriend = useMemo(
+    () => user?.canManageFriends !== false && !isGuestFriendView,
+    [user, isGuestFriendView]
+  );
   const userDisplayName = useMemo(() => user?.name || user?.email || 'User', [user]);
 
   const friendStats = useMemo(() => {
@@ -146,9 +172,9 @@ export const FriendDetailPage = () => {
   const leadSummary = useMemo(() => {
     const diff = Math.abs(friendStats.userPoints - friendStats.friendPoints);
     if (diff === 0) return 'Level';
-    const leader = friendStats.userPoints > friendStats.friendPoints ? userDisplayName : friendName;
+    const leader = friendStats.userPoints > friendStats.friendPoints ? userDisplayName : counterpartDisplayName;
     return `${leader} +${diff}`;
-  }, [friendStats, userDisplayName, friendName]);
+  }, [friendStats, userDisplayName, counterpartDisplayName]);
 
   useEffect(() => {
     let cancelled = false;
@@ -288,7 +314,7 @@ export const FriendDetailPage = () => {
       if (!copied) {
         if (navigator?.share) {
           try {
-            await navigator.share({ title: `${friendName} match history`, url });
+            await navigator.share({ title: `${titleDisplayName} match history`, url });
             setInfo('Opened share sheet. Choose Copy or Messages/WhatsApp.');
             return;
           } catch { /* cancelled */ }
@@ -302,6 +328,40 @@ export const FriendDetailPage = () => {
     } finally { setCopyingLink(false); }
   };
 
+  const onCopyLiveInvite = async () => {
+    setError('');
+    setInfo('');
+    setCopyingLiveInvite(true);
+    try {
+      const res = await axiosInstance.post(`/api/friends/${friendId}/live-invite`);
+      const url = String(res?.data?.registerUrl || '').trim();
+      if (!url) {
+        setError('Unable to generate live invite link');
+        return;
+      }
+
+      const copied = await copyToClipboard(url);
+      if (!copied) {
+        if (navigator?.share) {
+          try {
+            await navigator.share({ title: 'PointScorer live invite', url });
+            setInfo('Opened share sheet for live invite');
+            return;
+          } catch {
+            // ignored
+          }
+        }
+        setError(`Copy failed. Share this link manually: ${url}`);
+        return;
+      }
+      setInfo('Live invite link copied');
+    } catch (err) {
+      setError(err?.response?.data?.message || 'Failed to generate live invite link');
+    } finally {
+      setCopyingLiveInvite(false);
+    }
+  };
+
   const frozen  = (sessions || []).filter((s) => s.selectionFrozen === true);
   const pending = (sessions || []).filter((s) => s.selectionFrozen === false);
 
@@ -310,12 +370,21 @@ export const FriendDetailPage = () => {
 
       {/* ── Page header ───────────────────────────────────────────────────── */}
       <div className="mb-5">
-        <h1 className="text-xl font-bold text-slate-900 leading-tight">{friendName}</h1>
-        <p className="mt-0.5 text-xs text-slate-400 mb-3">Rulesets and match sessions for this friend.</p>
-        <div className="flex gap-2">
+        <h1 className="text-xl font-bold text-slate-900 leading-tight">{titleDisplayName}</h1>
+        <p className="mt-0.5 text-xs text-slate-400 mb-3">
+          {isGuestFriendView
+            ? `Connected user: ${counterpartDisplayName} • History and results are view-only from your account.`
+            : 'Rulesets and match sessions for this friend.'}
+        </p>
+        <div className={`grid grid-cols-1 gap-2 ${canManageThisFriend ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
           <Button variant="secondary" fullWidth onClick={onCopyFriendViewLink} disabled={copyingLink}>
             {copyingLink ? 'Copying…' : 'Copy result link'}
           </Button>
+          {canManageThisFriend ? (
+            <Button variant="secondary" fullWidth onClick={onCopyLiveInvite} disabled={copyingLiveInvite}>
+              {copyingLiveInvite ? 'Copying…' : 'Copy live invite'}
+            </Button>
+          ) : null}
           <Link to={`/friends/${friendId}/rulesets`} className="flex-1">
             <Button variant="secondary" fullWidth>Rulesets</Button>
           </Link>
@@ -323,7 +392,7 @@ export const FriendDetailPage = () => {
       </div>
 
       {error && <Alert type="error">{error}</Alert>}
-      {info  && <Alert type="success">{info}</Alert>}
+      {info  && <Alert type="success" floating>{info}</Alert>}
 
       {loading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-slate-500">
@@ -344,7 +413,7 @@ export const FriendDetailPage = () => {
               <div className="grid grid-cols-2 gap-2">
                 <StatBox label="Matches played"           value={friendStats.matchesPlayed} />
                 <StatBox label={`${userDisplayName} pts`} value={friendStats.userPoints} />
-                <StatBox label={`${friendName} pts`}      value={friendStats.friendPoints} />
+                <StatBox label={`${counterpartDisplayName} pts`}      value={friendStats.friendPoints} />
                 <StatBox label="Standing"                 value={leadSummary} />
               </div>
 
@@ -360,11 +429,12 @@ export const FriendDetailPage = () => {
                       key={s._id}
                       s={s}
                       userDisplayName={userDisplayName}
-                      friendName={friendName}
+                      friendName={counterpartDisplayName}
                       deletingId={deletingId}
                       onDeleteSession={onDeleteSession}
                       showResult
                       isPending={false}
+                      canDelete={canManageThisFriend}
                     />
                   ))}
                 </div>
@@ -395,11 +465,12 @@ export const FriendDetailPage = () => {
                       key={s._id}
                       s={s}
                       userDisplayName={userDisplayName}
-                      friendName={friendName}
+                      friendName={counterpartDisplayName}
                       deletingId={deletingId}
                       onDeleteSession={onDeleteSession}
                       showResult={false}
                       isPending
+                      canDelete={canManageThisFriend}
                     />
                   ))}
                 </div>

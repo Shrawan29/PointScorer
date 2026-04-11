@@ -406,7 +406,7 @@ export const PlayerSelectionPage = () => {
       </div>
 
       {error && <Alert type="error">{error}</Alert>}
-      {info  && <Alert type="success">{info}</Alert>}
+      {info  && <Alert type="success" floating>{info}</Alert>}
 
       {loading ? (
         <div className="flex items-center gap-2 py-8 text-sm text-slate-500">

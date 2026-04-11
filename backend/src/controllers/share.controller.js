@@ -2,23 +2,23 @@ import mongoose from 'mongoose';
 import crypto from 'crypto';
 
 import Friend from '../models/Friend.model.js';
-import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import PointsBreakdown from '../models/PointsBreakdown.model.js';
 import RuleSet from '../models/RuleSet.model.js';
 import User from '../models/User.model.js';
 import { formatWhatsAppBreakdownShareText, formatWhatsAppShareText } from '../utils/whatsappFormatter.js';
 import { buildDetailedBreakdownForSessionId } from '../services/breakdown.service.js';
+import {
+	orientBreakdownsForViewer,
+	orientSelectionForViewer,
+	resolveSessionViewerAccess,
+} from '../services/sessionAccess.service.js';
 
 export const getWhatsAppShareText = async (req, res, next) => {
 	try {
 		const { sessionId } = req.params;
-
-		if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-			return res.status(400).json({ message: 'Invalid sessionId' });
-		}
-
-		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId }).lean();
+		const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
+		const session = access.session;
 		if (!session) {
 			return res.status(404).json({ message: 'MatchSession not found' });
 		}
@@ -26,17 +26,28 @@ export const getWhatsAppShareText = async (req, res, next) => {
 			return res.status(409).json({ message: 'MatchSession is not COMPLETED' });
 		}
 
-		const [friend, ruleset, selection, breakdowns, user] = await Promise.all([
-			Friend.findOne({ _id: session.friendId, userId: req.userId }).lean(),
-			RuleSet.findOne({ _id: session.rulesetId, userId: req.userId }).lean(),
+		const [ruleset, selection, breakdowns, user, hostUser] = await Promise.all([
+			RuleSet.findOne({ _id: session.rulesetId, userId: access.ownerUserId }).lean(),
 			PlayerSelection.findOne({ sessionId }).lean(),
 			PointsBreakdown.find({ sessionId }).lean(),
 			User.findOne({ _id: req.userId }).lean(),
+			access.viewerRole === 'GUEST'
+				? User.findOne({ _id: access.ownerUserId }).select('name email').lean()
+				: Promise.resolve(null),
 		]);
+		const friendName =
+			access.viewerRole === 'GUEST'
+				? hostUser?.name || hostUser?.email || 'User'
+				: access.friend?.friendName || 'Friend';
+		const orientedSelection = orientSelectionForViewer({
+			selection,
+			viewerRole: access.viewerRole,
+		});
+		const orientedBreakdowns = orientBreakdownsForViewer({
+			rows: breakdowns,
+			viewerRole: access.viewerRole,
+		});
 
-		if (!friend) {
-			return res.status(404).json({ message: 'Friend not found' });
-		}
 		if (!ruleset) {
 			return res.status(404).json({ message: 'RuleSet not found' });
 		}
@@ -50,10 +61,10 @@ export const getWhatsAppShareText = async (req, res, next) => {
 		const text = formatWhatsAppShareText({
 			matchSession: session,
 			userName: user?.name || user?.email || null,
-			friendName: friend.friendName,
+			friendName,
 			rulesetName: ruleset.rulesetName,
-			playerSelections: selection,
-			pointsBreakdowns: breakdowns,
+			playerSelections: orientedSelection,
+			pointsBreakdowns: orientedBreakdowns,
 		});
 
 		return res.status(200).json({ text });
@@ -65,33 +76,36 @@ export const getWhatsAppShareText = async (req, res, next) => {
 export const getWhatsAppBreakdownShareText = async (req, res, next) => {
 	try {
 		const { sessionId } = req.params;
-
-		if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-			return res.status(400).json({ message: 'Invalid sessionId' });
-		}
-
-		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId }).lean();
+		const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
+		const session = access.session;
 		if (!session) {
 			return res.status(404).json({ message: 'MatchSession not found' });
 		}
 
-		const [friend, ruleset, selection] = await Promise.all([
-			Friend.findOne({ _id: session.friendId, userId: req.userId }).lean(),
-			RuleSet.findOne({ _id: session.rulesetId, userId: req.userId }).lean(),
+		const [ruleset, selection, hostUser] = await Promise.all([
+			RuleSet.findOne({ _id: session.rulesetId, userId: access.ownerUserId }).lean(),
 			PlayerSelection.findOne({ sessionId }).lean(),
+			access.viewerRole === 'GUEST'
+				? User.findOne({ _id: access.ownerUserId }).select('name email').lean()
+				: Promise.resolve(null),
 		]);
 		const user = await User.findOne({ _id: req.userId }).lean();
+		const friendName =
+			access.viewerRole === 'GUEST'
+				? hostUser?.name || hostUser?.email || 'User'
+				: access.friend?.friendName || 'Friend';
+		const orientedSelection = orientSelectionForViewer({
+			selection,
+			viewerRole: access.viewerRole,
+		});
 
-		if (!friend) {
-			return res.status(404).json({ message: 'Friend not found' });
-		}
 		if (!ruleset) {
 			return res.status(404).json({ message: 'RuleSet not found' });
 		}
 		if (!selection) {
 			return res.status(404).json({ message: 'PlayerSelection not found' });
 		}
-		if (!selection.isFrozen) {
+		if (!orientedSelection.isFrozen) {
 			return res.status(409).json({ message: 'PlayerSelection must be frozen' });
 		}
 
@@ -99,9 +113,9 @@ export const getWhatsAppBreakdownShareText = async (req, res, next) => {
 		const text = formatWhatsAppBreakdownShareText({
 			matchSession: session,
 			userName: user?.name || user?.email || null,
-			friendName: friend.friendName,
+			friendName,
 			rulesetName: ruleset.rulesetName,
-			playerSelections: selection,
+			playerSelections: orientedSelection,
 			breakdown,
 		});
 
@@ -119,7 +133,10 @@ export const getFriendViewerLink = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid friendId' });
 		}
 
-		const friend = await Friend.findOne({ _id: friendId, userId: req.userId });
+		const friend = await Friend.findOne({
+			_id: friendId,
+			$or: [{ userId: req.userId }, { linkedUserId: req.userId }],
+		});
 		if (!friend) {
 			return res.status(404).json({ message: 'Friend not found' });
 		}

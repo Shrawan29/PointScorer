@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import User from '../models/User.model.js';
 import PasswordResetRequest from '../models/PasswordResetRequest.model.js';
 import ENV from '../config/env.js';
+import { getFriendInviteByToken, linkFriendByInviteToken } from '../services/friendInvite.service.js';
 
 const parseExpiresInMs = (value) => {
   // Supports jsonwebtoken-style short strings like '7d', '12h', '30m', '15s'
@@ -22,9 +23,44 @@ const newSessionId = () => {
   return crypto.randomBytes(16).toString('hex');
 };
 
+const normalizeInviteToken = (value) => String(value || '').trim().toLowerCase();
+
+const buildInviteLinkPayload = (out) => ({
+  linked: true,
+  alreadyLinked: Boolean(out?.alreadyLinked),
+  friendId: String(out?.friend?._id || ''),
+  friendName: out?.friend?.friendName || null,
+  hostUserId: String(out?.friend?.userId || ''),
+});
+
+const normalizeUpdateVersion = (value) => String(value || '').trim();
+
 export const register = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    let name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = req.body?.password;
+    const inviteToken = normalizeInviteToken(req.body?.inviteToken);
+    const inviteRequired = ENV.INVITE_ONLY_REGISTRATION;
+    let invite = null;
+
+    if (inviteRequired && !inviteToken) {
+      return res.status(403).json({ message: 'Registration is invite-only' });
+    }
+
+    if (inviteToken) {
+      invite = await getFriendInviteByToken(inviteToken);
+      if (invite.linkedUserId) {
+        return res.status(409).json({
+          message:
+            'This invite is already linked. Please login with the previously linked account.',
+        });
+      }
+
+      if (!name) {
+        name = String(invite?.friendName || '').trim() || 'Friend';
+      }
+    }
 
     // Validate input
     if (!name || !email || !password) {
@@ -45,11 +81,26 @@ export const register = async (req, res, next) => {
       name,
       email,
       password: hashedPassword,
+      canManageFriends: inviteToken
+        ? ENV.GUEST_REGISTRATION_CAN_MANAGE_FRIENDS
+        : true,
     });
 
     await user.save();
 
-    return res.status(201).json({ message: 'User registered successfully' });
+    let inviteLink = null;
+    if (inviteToken) {
+      const linked = await linkFriendByInviteToken({
+        inviteToken,
+        linkedUserId: user._id,
+      });
+      inviteLink = buildInviteLinkPayload(linked);
+    }
+
+    return res.status(201).json({
+      message: 'User registered successfully',
+      inviteLink,
+    });
   } catch (error) {
     next(error);
   }
@@ -58,6 +109,7 @@ export const register = async (req, res, next) => {
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
+    const inviteToken = normalizeInviteToken(req.body?.inviteToken);
 
     // Validate input
     if (!email || !password) {
@@ -90,6 +142,15 @@ export const login = async (req, res, next) => {
       });
     }
 
+    let inviteLink = null;
+    if (inviteToken) {
+      const linked = await linkFriendByInviteToken({
+        inviteToken,
+        linkedUserId: user._id,
+      });
+      inviteLink = buildInviteLinkPayload(linked);
+    }
+
     const sessionId = newSessionId();
     const expiresAt = new Date(Date.now() + parseExpiresInMs(ENV.JWT_EXPIRES_IN));
     user.activeSessionId = sessionId;
@@ -109,7 +170,9 @@ export const login = async (req, res, next) => {
         name: user.name,
         email: user.email,
         isAdmin: user.isAdmin,
+        canManageFriends: user.canManageFriends !== false,
       },
+      inviteLink,
     });
   } catch (error) {
     next(error);
@@ -133,7 +196,8 @@ export const logout = async (req, res, next) => {
 
 export const forceLogoutOtherSession = async (req, res, next) => {
 	try {
-		const { email, password } = req.body;
+    const { email, password } = req.body;
+    const inviteToken = normalizeInviteToken(req.body?.inviteToken);
 
 		// Validate input
 		if (!email || !password) {
@@ -157,6 +221,15 @@ export const forceLogoutOtherSession = async (req, res, next) => {
 		user.activeSessionExpiresAt = null;
 		await user.save();
 
+    let inviteLink = null;
+    if (inviteToken) {
+      const linked = await linkFriendByInviteToken({
+        inviteToken,
+        linkedUserId: user._id,
+      });
+      inviteLink = buildInviteLinkPayload(linked);
+    }
+
 		// Create new session for this device
 		const sessionId = newSessionId();
 		const expiresAt = new Date(Date.now() + parseExpiresInMs(ENV.JWT_EXPIRES_IN));
@@ -177,11 +250,36 @@ export const forceLogoutOtherSession = async (req, res, next) => {
 				name: user.name,
 				email: user.email,
 				isAdmin: user.isAdmin,
+        canManageFriends: user.canManageFriends !== false,
 			},
+			inviteLink,
 		});
 	} catch (error) {
 		next(error);
 	}
+};
+
+export const acceptFriendInvite = async (req, res, next) => {
+  try {
+    const inviteToken = normalizeInviteToken(req.body?.inviteToken);
+    if (!inviteToken) {
+      return res.status(400).json({ message: 'inviteToken is required' });
+    }
+
+    const linked = await linkFriendByInviteToken({
+      inviteToken,
+      linkedUserId: req.userId,
+    });
+
+    return res.status(200).json({
+      message: linked.alreadyLinked
+        ? 'Invite already linked to this account'
+        : 'Invite linked successfully',
+      inviteLink: buildInviteLinkPayload(linked),
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const requestPasswordReset = async (req, res, next) => {
@@ -264,4 +362,68 @@ export const changePassword = async (req, res, next) => {
   }
 };
 
-export default { register, login, logout, forceLogoutOtherSession, changePassword, requestPasswordReset };
+export const getUpdateNoticeStatus = async (req, res, next) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const version = normalizeUpdateVersion(req.params?.version);
+    if (!version) {
+      return res.status(400).json({ message: 'version is required' });
+    }
+
+    const user = await User.findById(req.userId)
+      .select('seenUpdateVersions')
+      .lean();
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const seen = Array.isArray(user.seenUpdateVersions)
+      ? user.seenUpdateVersions.includes(version)
+      : false;
+
+    return res.status(200).json({ version, seen });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const markUpdateNoticeSeen = async (req, res, next) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const version = normalizeUpdateVersion(req.params?.version);
+    if (!version) {
+      return res.status(400).json({ message: 'version is required' });
+    }
+
+    const result = await User.updateOne(
+      { _id: req.userId },
+      { $addToSet: { seenUpdateVersions: version } }
+    );
+
+    if (!result?.matchedCount) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({ ok: true, version, seen: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export default {
+  register,
+  login,
+  logout,
+  forceLogoutOtherSession,
+  changePassword,
+  requestPasswordReset,
+  acceptFriendInvite,
+  getUpdateNoticeStatus,
+  markUpdateNoticeSeen,
+};

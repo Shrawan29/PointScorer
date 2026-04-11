@@ -1,9 +1,11 @@
 import mongoose from 'mongoose';
 import axios from 'axios';
+import { createServer } from 'http';
 import app from './src/app.js';
 import ENV from './src/config/env.js';
 import { startMatchPollingJob } from './src/jobs/matchPolling.job.js';
 import { startStatsPollingJob } from './src/jobs/statsPolling.job.js';
+import { initializeLiveRoomRealtime } from './src/services/liveRoomRealtime.service.js';
 
 let selfPingTimer = null;
 
@@ -53,7 +55,9 @@ const startServer = async () => {
     // even if MongoDB is temporarily unavailable.
 	const port = ENV.PORT;
 	const host = process.env.HOST || '0.0.0.0';
-	app.listen(port, host, () => {
+  const httpServer = createServer(app);
+  initializeLiveRoomRealtime(httpServer);
+  httpServer.listen(port, host, () => {
 		console.log(`Server running on ${host}:${port}`);
 		console.log(`[Env] PORT=${process.env.PORT || ''} HOST=${process.env.HOST || ''}`);
     startSelfPing();

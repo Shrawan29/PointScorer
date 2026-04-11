@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
 import Alert from '../components/Alert.jsx';
@@ -9,6 +10,11 @@ import FormField from '../components/FormField.jsx';
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const inviteToken = useMemo(() => {
+    const qp = new URLSearchParams(location.search || '');
+    return String(qp.get('invite') || '').trim();
+  }, [location.search]);
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -16,6 +22,44 @@ export const RegisterPage = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [invitePreview, setInvitePreview] = useState(null);
+  const [invitePreviewError, setInvitePreviewError] = useState('');
+
+  useEffect(() => {
+    if (!inviteToken) {
+      setInvitePreview(null);
+      setInvitePreviewError('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadInvitePreview = async () => {
+      try {
+        const res = await axiosInstance.get(`/api/public/live-invite/${encodeURIComponent(inviteToken)}`);
+        if (cancelled) return;
+
+        const preview = res?.data || null;
+        setInvitePreview(preview);
+        setInvitePreviewError('');
+
+        const suggestedName = String(preview?.friendName || '').trim();
+        if (suggestedName) {
+          setName((prev) => (String(prev || '').trim() ? prev : suggestedName));
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setInvitePreview(null);
+        setInvitePreviewError(err?.response?.data?.message || 'Invite link is invalid or expired');
+      }
+    };
+
+    void loadInvitePreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken]);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -24,9 +68,17 @@ export const RegisterPage = () => {
     setLoading(true);
 
     try {
-      await axiosInstance.post('/api/auth/register', { name, email, password });
+      await axiosInstance.post('/api/auth/register', {
+        name,
+        email,
+        password,
+        inviteToken: inviteToken || undefined,
+      });
       setSuccess('Account created. Redirecting to login...');
-      setTimeout(() => navigate('/login', { replace: true }), 700);
+      setTimeout(() => {
+        const loginPath = inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login';
+        navigate(loginPath, { replace: true });
+      }, 700);
     } catch (err) {
       setError(err?.response?.data?.message || 'Registration failed');
     } finally {
@@ -45,6 +97,24 @@ export const RegisterPage = () => {
           <form onSubmit={onSubmit} className="space-y-3">
             {error && <Alert type="error">{error}</Alert>}
             {success && <Alert type="success">{success}</Alert>}
+            {inviteToken ? (
+              <Alert>
+                {invitePreview ? (
+                  <>
+                    Invited by <strong>{invitePreview.hostName || 'User'}</strong>.
+                    Your name is auto-filled from their friend list as <strong>{invitePreview.friendName || name || 'Friend'}</strong>.
+                    {invitePreview.alreadyLinked ? (
+                      <> This invite is already linked to an account. Please login instead.</>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    Register with this invite to link your account.
+                    {invitePreviewError ? <> {invitePreviewError}.</> : null}
+                  </>
+                )}
+              </Alert>
+            ) : null}
             <FormField label="Name" value={name} onChange={setName} />
             <FormField label="Email" value={email} onChange={setEmail} type="email" />
             <FormField label="Password" value={password} onChange={setPassword} type="password" />
@@ -54,7 +124,13 @@ export const RegisterPage = () => {
           </form>
 
           <div className="text-xs text-slate-600 mt-3 text-center">
-            Already have an account? <Link className="font-semibold text-[var(--brand)] underline" to="/login">Login</Link>
+            Already have an account?{' '}
+            <Link
+              className="font-semibold text-[var(--brand)] underline"
+              to={inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login'}
+            >
+              Login
+            </Link>
           </div>
         </Card>
       </div>

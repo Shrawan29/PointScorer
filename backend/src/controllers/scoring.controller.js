@@ -10,6 +10,7 @@ import { calculatePlayerPoints } from '../services/pointsEngine.service.js';
 import { buildDetailedBreakdownForSessionId } from '../services/breakdown.service.js';
 import { getCricbuzzMatchStateById } from '../services/scraper.service.js';
 import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh.service.js';
+import { resolveSessionViewerAccess } from '../services/sessionAccess.service.js';
 
 export const calculatePointsForSession = async (req, res, next) => {
 	try {
@@ -23,10 +24,8 @@ export const calculatePointsForSession = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid sessionId' });
 		}
 
-		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId });
-		if (!session) {
-			return res.status(404).json({ message: 'MatchSession not found' });
-		}
+		const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
+		const session = access.session;
 		// Note: We allow calculation even if session is UPCOMING,
 		// because this app supports manual stat entry and sessions may not auto-transition.
 		// However: if the Cricbuzz match is still UPCOMING, treat it as not started.
@@ -109,7 +108,10 @@ export const calculatePointsForSession = async (req, res, next) => {
 			await PointsBreakdown.deleteMany({ sessionId });
 		}
 
-		const ruleSet = await RuleSet.findOne({ _id: session.rulesetId, userId: req.userId }).lean();
+		const ruleSet = await RuleSet.findOne({
+			_id: session.rulesetId,
+			userId: access.ownerUserId,
+		}).lean();
 		if (!ruleSet) {
 			return res.status(404).json({ message: 'RuleSet not found' });
 		}
@@ -238,9 +240,10 @@ export const refreshStatsAndRecalculate = async (req, res, next) => {
 	try {
 		const { sessionId } = req.params;
 		const force = String(req.query?.force ?? req.body?.force ?? 'true').toLowerCase() === 'true';
+		const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
 		const out = await refreshStatsAndRecalculateForSessionId({
 			sessionId,
-			userId: req.userId,
+			userId: access.ownerUserId,
 			force,
 		});
 		return res.status(200).json(out);

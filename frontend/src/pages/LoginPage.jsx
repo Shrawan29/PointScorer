@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
 import Alert from '../components/Alert.jsx';
@@ -11,7 +11,12 @@ import { useAuth } from '../context/AuthContext.jsx';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login } = useAuth();
+  const inviteToken = useMemo(() => {
+    const qp = new URLSearchParams(location.search || '');
+    return String(qp.get('invite') || '').trim();
+  }, [location.search]);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,14 +34,24 @@ export const LoginPage = () => {
     setForceLogoutError('');
 
     try {
-      const res = await axiosInstance.post('/api/auth/login', { email, password });
+      const res = await axiosInstance.post('/api/auth/login', {
+        email,
+        password,
+        inviteToken: inviteToken || undefined,
+      });
       login(res.data.token, res.data.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      if (err?.response?.status === 409) {
+      const status = err?.response?.status;
+      const message = err?.response?.data?.message || 'Login failed';
+      const isSessionConflict =
+        status === 409 &&
+        /already logged in on another device/i.test(String(message));
+
+      if (isSessionConflict) {
         setSessionConflict(true);
       } else {
-        setError(err?.response?.data?.message || 'Login failed');
+        setError(message);
       }
     } finally {
       setLoading(false);
@@ -48,7 +63,11 @@ export const LoginPage = () => {
     setForceLogoutLoading(true);
 
     try {
-      const res = await axiosInstance.post('/api/auth/force-logout-other-session', { email, password });
+      const res = await axiosInstance.post('/api/auth/force-logout-other-session', {
+        email,
+        password,
+        inviteToken: inviteToken || undefined,
+      });
       login(res.data.token, res.data.user);
       setSessionConflict(false);
       navigate('/dashboard', { replace: true });
@@ -81,6 +100,12 @@ export const LoginPage = () => {
         <Card title="Login">
           <form onSubmit={onSubmit} className="space-y-3">
             {error && <Alert type="error">{error}</Alert>}
+            {inviteToken ? (
+              <Alert>
+                Already registered using an old friend invite? Login with your existing account.
+                This new friend will be added to your existing friends tabs.
+              </Alert>
+            ) : null}
             <FormField label="Email" value={email} onChange={setEmail} type="email" />
             <FormField label="Password" value={password} onChange={setPassword} type="password" />
             <Button type="submit" disabled={loading} fullWidth>
@@ -90,10 +115,19 @@ export const LoginPage = () => {
 
 			<div className="text-xs text-slate-600 mt-3 text-center">
 				Forgot password?{' '}
-        <Link className="font-semibold text-[var(--brand)] underline" to="/request-password-reset">
+				<Link className="font-semibold text-[var(--brand)] underline" to="/request-password-reset">
 					Request reset
 				</Link>
 			</div>
+          <div className="text-xs text-slate-600 mt-2 text-center">
+            Need an account?{' '}
+            <Link
+              className="font-semibold text-[var(--brand)] underline"
+              to={inviteToken ? `/register?invite=${encodeURIComponent(inviteToken)}` : '/register'}
+            >
+              Register
+            </Link>
+          </div>
         </Card>
       </div>
     </div>

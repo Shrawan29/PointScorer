@@ -336,7 +336,7 @@ export const ResultPage = () => {
       </div>
 
       {error && <Alert type="error">{error}</Alert>}
-      {info  && <Alert type="success">{info}</Alert>}
+      {info  && <Alert type="success" floating>{info}</Alert>}
 
       {/* Status banners */}
       {!loading && data && !data?.selectionFrozen && (

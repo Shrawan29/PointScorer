@@ -9,6 +9,20 @@ import RuleSet from '../models/RuleSet.model.js';
 import MatchHistory from '../models/MatchHistory.model.js';
 import { scrapeTodayAndLiveMatches, scrapeUpcomingMatches, scrapeMatchDetails } from '../services/scraper.service.js';
 import { refreshStatsAndRecalculateForSessionId } from '../services/statsRefresh.service.js';
+import { orientTotalsForViewer, resolveSessionViewerAccess } from '../services/sessionAccess.service.js';
+
+const toAppError = (message, statusCode = 400) => {
+	const err = new Error(message);
+	err.statusCode = statusCode;
+	return err;
+};
+
+const buildDuplicateMatchMessage = (realMatchName) => {
+	const safeName = String(realMatchName || '').trim();
+	return safeName
+		? `You have already played this match (${safeName}) with this friend. You can only play each match with the same friend once.`
+		: 'You have already played this match with this friend. You can only play each match with the same friend once.';
+};
 
 const normalizeStatusBucket = (match) => {
 	const raw = String(match?.matchStatus || '').toLowerCase();
@@ -62,6 +76,46 @@ const buildSelectionSummary = (selection) => {
 		userCaptain: selection?.userCaptain || selection?.captain || null,
 		friendCaptain: selection?.friendCaptain || null,
 	};
+};
+
+const orientSelectionSummaryForViewer = (summary, viewerRole) => {
+	const base = summary || buildSelectionSummary(null);
+	if (String(viewerRole || '') !== 'GUEST') return base;
+
+	return {
+		...base,
+		userPlayers: Array.isArray(base.friendPlayers) ? base.friendPlayers : [],
+		friendPlayers: Array.isArray(base.userPlayers) ? base.userPlayers : [],
+		userCaptain: base.friendCaptain || null,
+		friendCaptain: base.userCaptain || null,
+	};
+};
+
+const resolveFriendViewerAccess = async ({ friendId, userId }) => {
+	const friend = await Friend.findById(friendId).lean();
+	if (!friend) throw toAppError('Friend not found', 404);
+
+	const viewerUserId = String(userId || '');
+	const ownerUserId = String(friend.userId || '');
+	const linkedUserId = String(friend.linkedUserId || '');
+
+	if (viewerUserId === ownerUserId) {
+		return {
+			viewerRole: 'HOST',
+			ownerUserId,
+			friend,
+		};
+	}
+
+	if (linkedUserId && viewerUserId === linkedUserId) {
+		return {
+			viewerRole: 'GUEST',
+			ownerUserId,
+			friend,
+		};
+	}
+
+	throw toAppError('You do not have access to this friend', 403);
 };
 
 const toNumber = (value) => {
@@ -329,8 +383,10 @@ export const getMatchById = async (req, res, next) => {
 export const createMatchSession = async (req, res, next) => {
 	try {
 		const { friendId, rulesetId, realMatchId, realMatchName } = req.body;
+		const safeRealMatchId = String(realMatchId || '').trim();
+		const safeRealMatchName = String(realMatchName || '').trim();
 
-		if (!friendId || !rulesetId || !realMatchId || !realMatchName) {
+		if (!friendId || !rulesetId || !safeRealMatchId || !safeRealMatchName) {
 			return res.status(400).json({
 				message: 'friendId, rulesetId, realMatchId, and realMatchName are required',
 			});
@@ -343,16 +399,26 @@ export const createMatchSession = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid rulesetId' });
 		}
 
-		// Check if user has already played this match with this friend
-		const existingMatch = await MatchHistory.findOne({
-			userId: req.userId,
-			friendId,
-			matchId: realMatchId,
-		});
+		const [existingSession, existingMatch] = await Promise.all([
+			MatchSession.findOne({
+				userId: req.userId,
+				friendId,
+				realMatchId: safeRealMatchId,
+			})
+				.select('_id')
+				.lean(),
+			MatchHistory.findOne({
+				userId: req.userId,
+				friendId,
+				matchId: safeRealMatchId,
+			})
+				.select('_id')
+				.lean(),
+		]);
 
-		if (existingMatch) {
+		if (existingSession || existingMatch) {
 			return res.status(400).json({
-				message: `You have already played this match (${realMatchName}) with this friend. You can only play each match with the same friend once.`,
+				message: buildDuplicateMatchMessage(safeRealMatchName),
 			});
 		}
 
@@ -369,14 +435,24 @@ export const createMatchSession = async (req, res, next) => {
 			return res.status(404).json({ message: 'RuleSet not found' });
 		}
 
-		const session = await MatchSession.create({
-			userId: req.userId,
-			friendId,
-			rulesetId,
-			realMatchId,
-			realMatchName,
-			status: 'UPCOMING',
-		});
+		let session = null;
+		try {
+			session = await MatchSession.create({
+				userId: req.userId,
+				friendId,
+				rulesetId,
+				realMatchId: safeRealMatchId,
+				realMatchName: safeRealMatchName,
+				status: 'UPCOMING',
+			});
+		} catch (createError) {
+			if (Number(createError?.code) === 11000) {
+				return res.status(409).json({
+					message: buildDuplicateMatchMessage(safeRealMatchName),
+				});
+			}
+			throw createError;
+		}
 
 		return res.status(201).json(session);
 	} catch (error) {
@@ -395,7 +471,9 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid friendId' });
 		}
 
-		let sessions = await MatchSession.find({ userId: req.userId, friendId })
+		const access = await resolveFriendViewerAccess({ friendId, userId: req.userId });
+
+		let sessions = await MatchSession.find({ userId: access.ownerUserId, friendId })
 			.sort({ createdAt: -1 })
 			.lean();
 
@@ -414,11 +492,11 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 			: await autoRefreshCompletionForSessions({
 				sessions,
 				selectionBySessionId,
-				userId: req.userId,
+				userId: access.ownerUserId,
 			});
 
 		if (completionUpdated) {
-			sessions = await MatchSession.find({ userId: req.userId, friendId })
+			sessions = await MatchSession.find({ userId: access.ownerUserId, friendId })
 				.sort({ createdAt: -1 })
 				.lean();
 			sessionIds = sessions.map((s) => s._id);
@@ -436,11 +514,27 @@ export const getMatchSessionsByFriend = async (req, res, next) => {
 			includePointsDebug,
 		});
 
-		const enriched = sessions.map((s) => ({
-			...s,
-			...(selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null)),
-			...(pointsBySessionId.get(String(s._id)) || buildEmptySessionPoints(includePointsDebug)),
-		}));
+		const enriched = sessions.map((s) => {
+			const selectionSummary = orientSelectionSummaryForViewer(
+				selectionBySessionId.get(String(s._id)) || buildSelectionSummary(null),
+				access.viewerRole,
+			);
+			const rawPoints = pointsBySessionId.get(String(s._id)) || buildEmptySessionPoints(includePointsDebug);
+			const viewerTotals = orientTotalsForViewer({
+				userTotalPoints: toNumber(rawPoints?.userTotalPoints),
+				friendTotalPoints: toNumber(rawPoints?.friendTotalPoints),
+				viewerRole: access.viewerRole,
+			});
+
+			return {
+				...s,
+				...selectionSummary,
+				...rawPoints,
+				userTotalPoints: viewerTotals.userTotalPoints,
+				friendTotalPoints: viewerTotals.friendTotalPoints,
+				pointsDifference: Math.abs(viewerTotals.userTotalPoints - viewerTotals.friendTotalPoints),
+			};
+		});
 
 		return res.status(200).json(onlyFrozen ? enriched.filter((s) => s.selectionFrozen) : enriched);
 	} catch (error) {
@@ -512,16 +606,9 @@ export const getMatchSessionById = async (req, res, next) => {
 		if (!sessionId) {
 			return res.status(400).json({ message: 'sessionId is required' });
 		}
-		if (!mongoose.Types.ObjectId.isValid(sessionId)) {
-			return res.status(400).json({ message: 'Invalid sessionId' });
-		}
 
-		const session = await MatchSession.findOne({ _id: sessionId, userId: req.userId }).lean();
-		if (!session) {
-			return res.status(404).json({ message: 'MatchSession not found' });
-		}
-
-		return res.status(200).json(session);
+		const access = await resolveSessionViewerAccess({ sessionId, userId: req.userId });
+		return res.status(200).json(access.session);
 	} catch (error) {
 		next(error);
 	}

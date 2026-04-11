@@ -136,7 +136,7 @@ export const FriendPublicResultPage = () => {
 				</div>
 
 				{error && <Alert type="error">{error}</Alert>}
-				{info && <Alert type="success">{info}</Alert>}
+				{info && <Alert type="success" floating>{info}</Alert>}
 				{!loading && data && !data?.selectionFrozen ? (
 					<Alert type="error">Selection is not frozen yet. Points are available after freeze.</Alert>
 				) : null}

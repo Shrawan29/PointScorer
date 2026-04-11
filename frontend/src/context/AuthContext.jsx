@@ -46,6 +46,31 @@ export const AuthProvider = ({ children }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!token) return undefined;
+
+    let cancelled = false;
+    const ping = async () => {
+      if (cancelled) return;
+      try {
+        await axiosInstance.post('/api/presence/heartbeat');
+      } catch {
+        // ignore transient failures
+      }
+    };
+
+    void ping();
+    const timer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      void ping();
+    }, 15_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [token]);
+
   const value = useMemo(
     () => ({
       user,

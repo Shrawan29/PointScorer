@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
 import Alert from '../components/Alert.jsx';
 import Card from '../components/Card.jsx';
 import MatchList from '../components/MatchList.jsx';
+import { useAuth } from '../context/AuthContext.jsx';
 
 const TAB_TODAY = 'TODAY';
 const TAB_UPCOMING = 'UPCOMING';
@@ -13,6 +15,7 @@ const TYPE_ODI = 'ODI';
 const TYPE_TEST = 'TEST';
 const TYPE_IPL = 'IPL';
 const CACHE_TTL_MS = 7200000;
+const DASHBOARD_UPDATE_VERSION = '2026-04-realtime-player-selection-v3';
 
 const readCachedMatches = (cacheKey) => {
   const sources = [sessionStorage, localStorage];
@@ -153,8 +156,12 @@ const normalizeMatch = (match, forcedStatus) => {
 };
 
 export const DashboardMatches = () => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showUpdateNotice, setShowUpdateNotice] = useState(false);
   const requestSeqRef = useRef(0);
   const iplSeasonHydratedRef = useRef(false);
   const dataRef = useRef({ todayMatches: [], upcomingMatches: [] });
@@ -164,10 +171,46 @@ export const DashboardMatches = () => {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [data, setData] = useState({ todayMatches: [], upcomingMatches: [] });
+  const forceShowUpdateNotice = useMemo(() => {
+    const qp = new URLSearchParams(location.search || '');
+    return qp.get('showUpdate') === '1';
+  }, [location.search]);
 
   useEffect(() => {
     dataRef.current = data;
   }, [data]);
+
+  useEffect(() => {
+    const userId = String(user?.id || user?._id || '').trim();
+    if (!userId) {
+      setShowUpdateNotice(forceShowUpdateNotice);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadUpdateNoticeStatus = async () => {
+      try {
+        const res = await axiosInstance.get(
+          `/api/auth/update-notice/${encodeURIComponent(DASHBOARD_UPDATE_VERSION)}`
+        );
+        if (cancelled) return;
+
+        const seen = Boolean(res?.data?.seen);
+        setShowUpdateNotice(forceShowUpdateNotice || !seen);
+      } catch {
+        if (cancelled) return;
+        // Fail-open so users still get the notice if status check fails.
+        setShowUpdateNotice(true);
+      }
+    };
+
+    void loadUpdateNoticeStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?._id, forceShowUpdateNotice]);
 
   const fetchMatchesFromApi = async ({
     bypassBackendCache = false,
@@ -346,11 +389,27 @@ export const DashboardMatches = () => {
 
   const applySearchFilter = () => { setSearch(searchInput); };
 
-  return (
-    <Card title="Matches">
-      {error && <Alert type="error">{error}</Alert>}
+  const dismissUpdateNotice = async () => {
+    setShowUpdateNotice(false);
+    try {
+      await axiosInstance.post(
+        `/api/auth/update-notice/${encodeURIComponent(DASHBOARD_UPDATE_VERSION)}/seen`
+      );
+    } catch {
+      // Ignore best-effort errors; UI remains dismissed for this session.
+    }
+    if (forceShowUpdateNotice) {
+      navigate(location.pathname, { replace: true });
+    }
+    setShowUpdateNotice(false);
+  };
 
-      <div className="flex flex-col gap-3">
+  return (
+    <div className="grid gap-3">
+      <Card title="Matches">
+        {error && <Alert type="error">{error}</Alert>}
+
+        <div className="flex flex-col gap-3">
 
         {/* Filter panel */}
         <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
@@ -452,8 +511,71 @@ export const DashboardMatches = () => {
             : <MatchList matches={filteredUpcomingMatches} />
         )}
 
-      </div>
-    </Card>
+        </div>
+      </Card>
+
+      {showUpdateNotice ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/25 p-3 sm:p-6">
+          <div className="max-h-[85vh] w-[min(96vw,58rem)] overflow-y-auto rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 shadow-xl sm:px-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-2">
+                <div className="font-semibold text-slate-900">New Update: Realtime Player Selection</div>
+                <div className="text-sm text-slate-700">
+                  Live turn-by-turn player selection is now enabled for linked users.
+                </div>
+
+                <div className="text-xs text-slate-700">
+                  <div className="font-semibold text-slate-800">What is included</div>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    <li>Realtime live rooms between linked users</li>
+                    <li>Online/offline visibility in Active Friends</li>
+                    <li>Turn-based picking with instant sync for both users</li>
+                    <li>Captain round support when enabled by ruleset</li>
+                    <li>Selection lock only when both teams have 6 to 9 players</li>
+                  </ul>
+                </div>
+
+                <div className="text-xs text-slate-700">
+                  <div className="font-semibold text-slate-800">How to link your friend (one-time setup)</div>
+                  <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                    <li>Open Friends and create/open your friend entry.</li>
+                    <li>Inside friend details, click Copy live invite.</li>
+                    <li>Send that invite link to your friend.</li>
+                    <li>Your friend opens the link and either registers (new account) or logs in (existing account).</li>
+                    <li>After successful login/register through the invite, the friend link is connected automatically.</li>
+                    <li>Now both of you can see each other in Active Friends and start live rooms.</li>
+                  </ol>
+                </div>
+
+                <div className="text-xs text-slate-700">
+                  <div className="font-semibold text-slate-800">How to use (step-by-step)</div>
+                  <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                    <li>Open Active Friends from the header/nav.</li>
+                    <li>Choose an online linked user and start a live room.</li>
+                    <li>Select ruleset and match, then create the room.</li>
+                    <li>Both users mark Ready in the room.</li>
+                    <li>Pick players turn-by-turn until both teams have 6 to 9 players.</li>
+                    <li>If captain mode is enabled, both users select captains.</li>
+                    <li>Use Lock to freeze and create the final selection session.</li>
+                  </ol>
+                </div>
+
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs font-semibold text-amber-800">
+                  Tip: Use the i button in the header to open this update again anytime.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={dismissUpdateNotice}
+                className="shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 };
 

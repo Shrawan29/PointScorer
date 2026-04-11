@@ -3,6 +3,31 @@ import mongoose from 'mongoose';
 import Friend from '../models/Friend.model.js';
 import RuleSet from '../models/RuleSet.model.js';
 
+const resolveFriendViewerAccess = async ({ friendId, userId }) => {
+	const friend = await Friend.findById(friendId).lean();
+	if (!friend) {
+		const err = new Error('Friend not found');
+		err.statusCode = 404;
+		throw err;
+	}
+
+	const viewerUserId = String(userId || '');
+	const ownerUserId = String(friend.userId || '');
+	const linkedUserId = String(friend.linkedUserId || '');
+
+	if (viewerUserId === ownerUserId) {
+		return { viewerRole: 'HOST', ownerUserId, friend };
+	}
+
+	if (linkedUserId && viewerUserId === linkedUserId) {
+		return { viewerRole: 'GUEST', ownerUserId, friend };
+	}
+
+	const err = new Error('You do not have access to this friend');
+	err.statusCode = 403;
+	throw err;
+};
+
 const CAPTAIN_MULTIPLIER = 2;
 
 const sanitizeRules = (rules) => {
@@ -93,12 +118,21 @@ export const getRuleSetsByFriend = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid friendId' });
 		}
 
-		const ruleSets = await RuleSet.find({
-			userId: req.userId,
-			friendId,
-		}).sort({ createdAt: -1 });
+		const access = await resolveFriendViewerAccess({ friendId, userId: req.userId });
 
-		return res.status(200).json(ruleSets);
+		const ruleSets = await RuleSet.find({
+			userId: access.ownerUserId,
+			friendId,
+		})
+			.sort({ createdAt: -1 })
+			.lean();
+
+		return res.status(200).json(
+			ruleSets.map((ruleset) => ({
+				...ruleset,
+				readOnly: access.viewerRole === 'GUEST',
+			}))
+		);
 	} catch (error) {
 		next(error);
 	}
@@ -112,12 +146,33 @@ export const getRuleSetById = async (req, res, next) => {
 			return res.status(400).json({ message: 'Invalid rulesetId' });
 		}
 
-		const ruleset = await RuleSet.findOne({ _id: rulesetId, userId: req.userId });
+		const ruleset = await RuleSet.findById(rulesetId).lean();
 		if (!ruleset) {
 			return res.status(404).json({ message: 'RuleSet not found' });
 		}
 
-		return res.status(200).json(ruleset);
+		if (String(ruleset.userId || '') === String(req.userId || '')) {
+			return res.status(200).json({ ...ruleset, readOnly: false });
+		}
+
+		const friendId = ruleset.friendId;
+		if (!friendId) {
+			return res.status(403).json({ message: 'You do not have access to this ruleset' });
+		}
+
+		const friend = await Friend.findOne({
+			_id: friendId,
+			userId: ruleset.userId,
+			linkedUserId: req.userId,
+		})
+			.select('_id')
+			.lean();
+
+		if (!friend) {
+			return res.status(403).json({ message: 'You do not have access to this ruleset' });
+		}
+
+		return res.status(200).json({ ...ruleset, readOnly: true });
 	} catch (error) {
 		next(error);
 	}

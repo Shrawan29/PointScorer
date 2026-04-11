@@ -35,4 +35,6 @@ const matchSessionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+matchSessionSchema.index({ userId: 1, friendId: 1, realMatchId: 1 }, { unique: true });
+
 export default mongoose.model('MatchSession', matchSessionSchema);

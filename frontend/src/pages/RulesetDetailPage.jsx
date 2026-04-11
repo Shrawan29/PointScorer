@@ -20,6 +20,7 @@ export const RulesetDetailPage = () => {
   const [saving, setSaving] = useState(false);
 
   const title = useMemo(() => ruleset?.rulesetName || 'Ruleset', [ruleset]);
+  const isReadOnly = Boolean(ruleset?.readOnly);
 
   useEffect(() => {
     const run = async () => {
@@ -63,7 +64,11 @@ export const RulesetDetailPage = () => {
     <Layout>
       <PageHeader
         title={title}
-        subtitle="Editing affects future sessions only. Completed match points are stored and not recalculated." 
+        subtitle={
+          isReadOnly
+            ? 'View-only ruleset. Completed match history is fully visible.'
+            : 'Editing affects future sessions only. Completed match points are stored and not recalculated.'
+        }
         actions={
           <Link to={`/friends/${friendId}/rulesets`}>
             <Button variant="secondary">Back</Button>
@@ -76,18 +81,24 @@ export const RulesetDetailPage = () => {
       <div className="grid gap-4">
         <Card title="Edit">
           <div className="grid gap-3">
-            <FormField label="Ruleset name" value={rulesetName} onChange={setRulesetName} />
+            <FormField
+              label="Ruleset name"
+              value={rulesetName}
+              onChange={setRulesetName}
+              disabled={isReadOnly}
+            />
 
             <label className="block">
               <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">Rules (JSON array)</div>
               <textarea
                 value={rulesText}
                 onChange={(e) => setRulesText(e.target.value)}
+                disabled={isReadOnly}
                 className="h-56 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 font-mono text-xs"
               />
             </label>
 
-            <Button onClick={onSave} disabled={saving}>
+            <Button onClick={onSave} disabled={saving || isReadOnly}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>

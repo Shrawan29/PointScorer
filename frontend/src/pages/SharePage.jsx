@@ -39,8 +39,19 @@ export const SharePage = () => {
     setError('');
     setInfo('');
     try {
-      await copyToClipboard(text);
-      setInfo('Copied');
+      const copied = await copyToClipboard(text);
+      if (copied) {
+        setInfo('Copied');
+        return;
+      }
+
+      if (navigator?.share) {
+        await navigator.share({ text });
+        setInfo('Opened share sheet. Choose WhatsApp or Copy.');
+        return;
+      }
+
+      setError('Copy failed on this device. Please long-press to copy the text manually.');
     } catch {
       setError('Copy failed');
     }
@@ -67,7 +78,7 @@ export const SharePage = () => {
       />
 
       {error && <Alert type="error">{error}</Alert>}
-      {info && <Alert type="success">{info}</Alert>}
+      {info && <Alert type="success" floating>{info}</Alert>}
 
       {loading ? (
         <div className="text-sm text-slate-600">Loading...</div>

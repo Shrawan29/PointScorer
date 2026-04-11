@@ -7,6 +7,11 @@ const friendSchema = new mongoose.Schema(
       ref: 'User',
       required: true,
     },
+    linkedUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     friendName: {
       type: String,
       required: true,
@@ -17,6 +22,16 @@ const friendSchema = new mongoose.Schema(
       trim: true,
       unique: true,
       sparse: true,
+    },
+    liveInviteToken: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
+    liveInviteExpiresAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

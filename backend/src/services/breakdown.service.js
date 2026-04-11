@@ -1,11 +1,11 @@
 import mongoose from 'mongoose';
 
-import Friend from '../models/Friend.model.js';
-import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import RawPlayerStats from '../models/RawPlayerStats.model.js';
 import RuleSet from '../models/RuleSet.model.js';
+import User from '../models/User.model.js';
 import { getCricbuzzMatchStateById } from './scraper.service.js';
+import { orientSelectionForViewer, resolveSessionViewerAccess } from './sessionAccess.service.js';
 
 const toNumber = (value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
 
@@ -165,29 +165,22 @@ export const buildDetailedBreakdownForSessionId = async ({ sessionId, userId }) 
 		throw err;
 	}
 
-	const session = await MatchSession.findOne({ _id: sessionId, userId }).lean();
-	if (!session) {
-		const err = new Error('MatchSession not found');
-		err.statusCode = 404;
-		throw err;
-	}
+	const access = await resolveSessionViewerAccess({ sessionId, userId });
+	const session = access.session;
 
-	const [friend, ruleset, selection] = await Promise.all([
-		Friend.findOne({ _id: session.friendId, userId }).lean(),
-		RuleSet.findOne({ _id: session.rulesetId, userId }).lean(),
+	const [ruleset, selection] = await Promise.all([
+		RuleSet.findOne({ _id: session.rulesetId, userId: access.ownerUserId }).lean(),
 		PlayerSelection.findOne({ sessionId }).lean(),
 	]);
+	const hostUser = access.viewerRole === 'GUEST'
+		? await User.findById(access.ownerUserId).select('name email').lean()
+		: null;
 
 	const matchState =
 		session.status === 'COMPLETED'
 			? { state: 'COMPLETED' }
 			: await getCricbuzzMatchStateById(session.realMatchId).catch(() => ({ state: 'UNKNOWN' }));
 
-	if (!friend) {
-		const err = new Error('Friend not found');
-		err.statusCode = 404;
-		throw err;
-	}
 	if (!ruleset) {
 		const err = new Error('RuleSet not found');
 		err.statusCode = 404;
@@ -199,15 +192,22 @@ export const buildDetailedBreakdownForSessionId = async ({ sessionId, userId }) 
 		throw err;
 	}
 
+	const orientedSelection = orientSelectionForViewer({
+		selection,
+		viewerRole: access.viewerRole,
+	});
+
 	const userPlayers =
-		Array.isArray(selection.userPlayers) && selection.userPlayers.length > 0
-			? selection.userPlayers
-			: Array.isArray(selection.selectedPlayers)
-				? selection.selectedPlayers
+		Array.isArray(orientedSelection.userPlayers) && orientedSelection.userPlayers.length > 0
+			? orientedSelection.userPlayers
+			: Array.isArray(orientedSelection.selectedPlayers)
+				? orientedSelection.selectedPlayers
 				: [];
-	const friendPlayers = Array.isArray(selection.friendPlayers) ? selection.friendPlayers : [];
-	const userCaptain = selection.userCaptain ?? selection.captain ?? null;
-	const friendCaptain = selection.friendCaptain ?? null;
+	const friendPlayers = Array.isArray(orientedSelection.friendPlayers)
+		? orientedSelection.friendPlayers
+		: [];
+	const userCaptain = orientedSelection.userCaptain ?? orientedSelection.captain ?? null;
+	const friendCaptain = orientedSelection.friendCaptain ?? null;
 
 	const rawStats = await RawPlayerStats.find({ sessionId }).lean();
 	const rawByPlayerId = new Map(rawStats.map((s) => [String(s.playerId), s]));
@@ -237,8 +237,11 @@ export const buildDetailedBreakdownForSessionId = async ({ sessionId, userId }) 
 			status: session.status,
 		},
 		friend: {
-			friendId: String(friend._id),
-			friendName: friend.friendName,
+			friendId: String(access.friend._id),
+			friendName:
+				access.viewerRole === 'GUEST'
+					? hostUser?.name || hostUser?.email || 'User'
+					: access.friend.friendName,
 		},
 		ruleset: {
 			rulesetId: String(ruleset._id),

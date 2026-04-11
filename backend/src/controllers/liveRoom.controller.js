@@ -7,34 +7,29 @@ import MatchSession from '../models/MatchSession.model.js';
 import PlayerSelection from '../models/PlayerSelection.model.js';
 import RuleSet from '../models/RuleSet.model.js';
 import User from '../models/User.model.js';
-import ENV from '../config/env.js';
 import { getUserPresence, markUserOnline } from '../services/presence.service.js';
 import { scrapeTodayAndLiveMatches, scrapeUpcomingMatches } from '../services/scraper.service.js';
 import { emitLiveRoomMutation } from '../services/liveRoomRealtime.service.js';
 
 const MAX_PLAYERS_PER_TEAM = 9;
 const MIN_PLAYERS_PER_TEAM = 6;
-const DEFAULT_LIVE_ROOM_TTL_SECONDS = 120;
+const FIXED_LIVE_ROOM_TTL_SECONDS = 5 * 60;
 const LIVE_ACTIVE_STATES = ['LOBBY', 'DRAFTING', 'CAPTAIN'];
 
-const getLiveRoomTtlSeconds = () => {
-  const ttlSeconds = Number(ENV.LIVE_ROOM_TTL_SECONDS || DEFAULT_LIVE_ROOM_TTL_SECONDS);
-  return Number.isFinite(ttlSeconds) && ttlSeconds > 0 ? ttlSeconds : DEFAULT_LIVE_ROOM_TTL_SECONDS;
-};
+const getLiveRoomTtlSeconds = () => FIXED_LIVE_ROOM_TTL_SECONDS;
 
 const maybeExtendRoomExpiry = (room) => {
   if (!room || LIVE_TERMINAL_STATES.has(String(room.status || '').toUpperCase())) return false;
 
   const ttlMs = getLiveRoomTtlSeconds() * 1000;
-  const now = Date.now();
   const expiresAtMs = new Date(room.expiresAt || 0).getTime();
-  const refreshThresholdMs = Math.max(10_000, Math.floor(ttlMs * 0.5));
-
-  if (expiresAtMs && expiresAtMs - now > refreshThresholdMs) {
+  if (expiresAtMs > 0) {
     return false;
   }
 
-  room.expiresAt = new Date(now + ttlMs);
+  const createdAtMs = new Date(room.createdAt || 0).getTime();
+  const baseMs = Number.isFinite(createdAtMs) && createdAtMs > 0 ? createdAtMs : Date.now();
+  room.expiresAt = new Date(baseMs + ttlMs);
   return true;
 };
 

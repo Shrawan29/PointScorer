@@ -103,7 +103,7 @@ export const LiveRoomCreatePage = () => {
     <Layout>
       <PageHeader
         title="Create Live Room"
-        subtitle="Both players must be online and ready."
+        subtitle="Both players must be online and ready. Live room auto-ends after 5 minutes."
         actions={
           <Link to="/friends?tab=active">
             <Button variant="secondary">Back</Button>

@@ -151,6 +151,7 @@ export const LiveRoomPage = () => {
   const [captainChoice, setCaptainChoice] = useState('');
   const [liveRealtimeConnected, setLiveRealtimeConnected] = useState(false);
   const [search, setSearch] = useState('');
+  const requestedExpiryRefreshRef = useRef(false);
 
   const countdown = useCountdown(
     typeof room?.secondsToExpire === 'number' ? room.secondsToExpire : undefined,
@@ -265,6 +266,16 @@ export const LiveRoomPage = () => {
     !isTerminal &&
     draftLockEligible &&
     !(status === 'CAPTAIN' && captainRequired && !captainComplete);
+
+  useEffect(() => {
+    if (typeof countdown !== 'number' || countdown > 0) {
+      requestedExpiryRefreshRef.current = false;
+      return;
+    }
+    if (isTerminal || requestedExpiryRefreshRef.current) return;
+    requestedExpiryRefreshRef.current = true;
+    void loadRoom({ silent: true });
+  }, [countdown, isTerminal, loadRoom]);
 
   const onSetReady = async (ready) => {
     setBusy(true); setError(''); setInfo('');

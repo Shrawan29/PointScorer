@@ -78,12 +78,12 @@ const getPlayersByTeam = (squads) => {
   return grouped;
 };
 
-// ── Tiny primitives ──────────────────────────────────────────────────────────
+// ── Primitives ───────────────────────────────────────────────────────────────
 
 const StatCell = ({ label, value, valueClass = '' }) => (
-  <div className="flex flex-col gap-0.5 px-3 py-2 border-r border-b border-slate-100 last:border-r-0 [&:nth-last-child(-n+2)]:border-b-0 [&:nth-child(2n)]:border-r-0">
-    <span className="text-[10px] text-slate-500">{label}</span>
-    <span className={`text-[13px] font-medium text-slate-900 ${valueClass}`}>{value}</span>
+  <div className="flex flex-col gap-0.5 px-3 py-1.5 border-r border-b border-slate-100 last:border-r-0 [&:nth-last-child(-n+2)]:border-b-0 [&:nth-child(2n)]:border-r-0">
+    <span className="text-[10px] text-slate-400 leading-tight">{label}</span>
+    <span className={`text-[12px] font-medium text-slate-900 leading-tight ${valueClass}`}>{value}</span>
   </div>
 );
 
@@ -186,8 +186,14 @@ export const LiveRoomPage = () => {
     for (const p of [...myPlayers, ...otherPlayers]) out.add(String(p).toLowerCase());
     return out;
   }, [myPlayers, otherPlayers]);
-  const myPickedKeys = useMemo(() => new Set(myPlayers.map((p) => normalizePlayer(p).toLowerCase())), [myPlayers]);
-  const opponentPickedKeys = useMemo(() => new Set(otherPlayers.map((p) => normalizePlayer(p).toLowerCase())), [otherPlayers]);
+  const myPickedKeys = useMemo(
+    () => new Set(myPlayers.map((p) => normalizePlayer(p).toLowerCase())),
+    [myPlayers],
+  );
+  const opponentPickedKeys = useMemo(
+    () => new Set(otherPlayers.map((p) => normalizePlayer(p).toLowerCase())),
+    [otherPlayers],
+  );
 
   const playersByTeam = useMemo(() => getPlayersByTeam(squads), [squads]);
   const filteredPlayersByTeam = useMemo(() => {
@@ -284,8 +290,6 @@ export const LiveRoomPage = () => {
     } finally { setBusy(false); }
   };
 
-  // ── Render ──────────────────────────────────────────────────────────────
-
   return (
     <Layout>
       {/* Page header */}
@@ -318,59 +322,72 @@ export const LiveRoomPage = () => {
 
           {/* Your-turn banner */}
           {!isTerminal && room?.myTurn && (
-            <div className="rounded-xl bg-[#EEEDFE] border border-[rgba(127,119,221,0.4)] px-3 py-2.5 text-[12.5px] font-medium text-[#3C3489] text-center">
+            <div className="rounded-xl bg-[#EEEDFE] border border-[rgba(127,119,221,0.4)] px-3 py-2 text-[12px] font-medium text-[#3C3489] text-center">
               Your turn to pick
             </div>
           )}
 
-          {/* Status card */}
+          {/* Status card — compact */}
           <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-100">
-              <span className="text-[12.5px] font-medium text-slate-800">Room status</span>
+            <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
+              <span className="text-[11.5px] font-medium text-slate-700">Room status</span>
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                status === 'FROZEN' ? 'bg-slate-100 text-slate-600 border-slate-200'
-                : status === 'CAPTAIN' ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : status === 'CANCELLED' || status === 'EXPIRED' ? 'bg-red-50 text-red-600 border-red-200'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                status === 'FROZEN'
+                  ? 'bg-slate-100 text-slate-600 border-slate-200'
+                  : status === 'CAPTAIN'
+                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                    : status === 'CANCELLED' || status === 'EXPIRED'
+                      ? 'bg-red-50 text-red-600 border-red-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
               }`}>
                 {status || 'UNKNOWN'}
               </span>
             </div>
 
+            {/* 2-col stat grid — compact rows */}
             <div className="grid grid-cols-2">
-              <StatCell label="Your role" value={meRole || '—'} />
-              <StatCell label="Your turn" value={room?.myTurn ? 'Yes' : 'No'} valueClass={room?.myTurn ? 'text-emerald-600' : ''} />
-              <StatCell label="You" value={room?.meReady ? 'Ready' : 'Not ready'} valueClass={room?.meReady ? 'text-emerald-600' : 'text-slate-400'} />
-              <StatCell label="Opponent" value={room?.counterpartReady ? 'Ready' : 'Not ready'} valueClass={room?.counterpartReady ? 'text-emerald-600' : 'text-slate-400'} />
+              <StatCell label="Role" value={meRole || '—'} />
               <StatCell
-                label="Picks"
-                value={`Host ${hostCount}/9 · Guest ${guestCount}/9`}
+                label="Your turn"
+                value={room?.myTurn ? 'Yes' : 'No'}
+                valueClass={room?.myTurn ? 'text-emerald-600' : ''}
               />
+              <StatCell
+                label="You"
+                value={room?.meReady ? 'Ready' : 'Not ready'}
+                valueClass={room?.meReady ? 'text-emerald-600' : 'text-slate-400'}
+              />
+              <StatCell
+                label="Opponent"
+                value={room?.counterpartReady ? 'Ready' : 'Not ready'}
+                valueClass={room?.counterpartReady ? 'text-emerald-600' : 'text-slate-400'}
+              />
+              <StatCell label="Picks" value={`H ${hostCount}/9 · G ${guestCount}/9`} />
               {!isTerminal && draftLockEligible ? (
                 <StatCell
                   label="Locks"
-                  value={`You ${meLocked ? 'Locked' : 'Pending'} · Opp ${counterpartLocked ? 'Locked' : 'Pending'}`}
+                  value={`You ${meLocked ? '🔒' : '–'} · Opp ${counterpartLocked ? '🔒' : '–'}`}
                   valueClass={bothLocked ? 'text-emerald-600' : meLocked ? 'text-amber-600' : ''}
                 />
               ) : <div />}
             </div>
 
             {captainRequired && (
-              <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500">
-                Captains — Host: <span className="text-slate-800">{room?.hostCaptain || 'Pending'}</span>
+              <div className="px-3 py-1.5 border-t border-slate-100 text-[10.5px] text-slate-500">
+                Captains — Host: <span className="text-slate-700">{room?.hostCaptain || 'Pending'}</span>
                 {' · '}
-                Guest: <span className="text-slate-800">{room?.guestCaptain || 'Pending'}</span>
+                Guest: <span className="text-slate-700">{room?.guestCaptain || 'Pending'}</span>
               </div>
             )}
 
-            {/* Status hint */}
+            {/* Contextual hint */}
             {canLockSelection && (
-              <div className={`px-3 py-2 border-t text-[11px] ${
-                meLocked && !bothLocked
-                  ? 'border-amber-100 bg-amber-50 text-amber-700'
-                  : bothLocked
-                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                    : 'border-slate-100 bg-slate-50 text-slate-600'
+              <div className={`px-3 py-1.5 border-t text-[10.5px] ${
+                bothLocked
+                  ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                  : meLocked
+                    ? 'border-amber-100 bg-amber-50 text-amber-700'
+                    : 'border-slate-100 bg-slate-50 text-slate-500'
               }`}>
                 {bothLocked
                   ? 'Both locks confirmed. Finalizing selection.'
@@ -385,17 +402,17 @@ export const LiveRoomPage = () => {
             )}
 
             {status === 'CANCELLED' && room?.cancelReason && (
-              <div className="px-3 py-2 border-t border-red-100 bg-red-50 text-[11px] text-red-600">
+              <div className="px-3 py-1.5 border-t border-red-100 bg-red-50 text-[10.5px] text-red-600">
                 Cancelled: {room.cancelReason}
               </div>
             )}
             {status === 'EXPIRED' && (
-              <div className="px-3 py-2 border-t border-amber-100 bg-amber-50 text-[11px] text-amber-700">
+              <div className="px-3 py-1.5 border-t border-amber-100 bg-amber-50 text-[10.5px] text-amber-700">
                 Room expired due to timeout.
               </div>
             )}
             {!isTerminal && typeof room?.secondsToExpire === 'number' && (
-              <div className="px-3 py-2 border-t border-slate-100 text-[11px] text-slate-500">
+              <div className="px-3 py-1.5 border-t border-slate-100 text-[10.5px] text-slate-400">
                 Expires in {room.secondsToExpire}s
               </div>
             )}
@@ -443,10 +460,9 @@ export const LiveRoomPage = () => {
 
           {/* Picks — side by side */}
           <div className="grid grid-cols-2 gap-2">
-            {/* My picks */}
             <div className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11.5px] font-medium text-slate-700">Your picks</span>
+                <span className="text-[11px] font-medium text-slate-700">Your picks</span>
                 <span className="text-[10px] font-medium bg-[#EEEDFE] text-[#3C3489] px-1.5 py-0.5 rounded-full">
                   {myPlayers.length}
                 </span>
@@ -459,10 +475,9 @@ export const LiveRoomPage = () => {
                 </div>
               )}
             </div>
-            {/* Opponent picks */}
             <div className="rounded-xl border border-slate-200 bg-white p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[11.5px] font-medium text-slate-700">Opponent</span>
+                <span className="text-[11px] font-medium text-slate-700">Opponent</span>
                 <span className="text-[10px] font-medium bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
                   {otherPlayers.length}
                 </span>
@@ -493,7 +508,6 @@ export const LiveRoomPage = () => {
                 </div>
               )}
 
-              {/* Search */}
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -501,7 +515,6 @@ export const LiveRoomPage = () => {
                 className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[var(--brand)]"
               />
 
-              {/* Player grid */}
               {Object.keys(filteredPlayersByTeam).length === 0 ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
                   {Object.keys(playersByTeam).length === 0
@@ -509,21 +522,23 @@ export const LiveRoomPage = () => {
                     : `No players match "${search}".`}
                 </div>
               ) : (
-                <div className="grid gap-3">
+                /* ↓ stacked on mobile, side-by-side on md+ */
+                <div className="grid gap-3 md:grid-cols-2">
                   {Object.entries(filteredPlayersByTeam).map(([teamName, players], teamIndex) => (
-                    <div key={teamName} className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                      {/* Team header */}
-                      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 bg-slate-50/70">
+                    <div key={teamName} className="rounded-xl border border-slate-200 bg-white overflow-hidden flex flex-col">
+                      {/* Team header — sticky within the card */}
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 bg-slate-50/80 sticky top-0 z-10">
                         <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[var(--brand)] text-[10px] font-medium text-white shrink-0">
                           {teamIndex + 1}
                         </span>
-                        <span className="text-[12.5px] font-medium text-slate-800 truncate">{teamName}</span>
+                        <span className="text-[12px] font-medium text-slate-800 truncate">{teamName}</span>
                         <span className="ml-auto text-[10px] font-medium text-[#534AB7] bg-[#EEEDFE] px-1.5 py-0.5 rounded-full shrink-0">
                           {players.length}p
                         </span>
                       </div>
-                      {/* Player rows */}
-                      <div>
+
+                      {/* Scrollable player list */}
+                      <div className="overflow-y-auto max-h-60 divide-y divide-slate-50">
                         {players.map((p) => {
                           const key = normalizePlayer(p).toLowerCase();
                           const pickedByMe = myPickedKeys.has(key);
@@ -532,15 +547,15 @@ export const LiveRoomPage = () => {
                           return (
                             <div
                               key={`${teamName}:${p}`}
-                              className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-slate-50 last:border-b-0"
+                              className="flex items-center justify-between gap-3 px-3 py-2"
                             >
-                              <span className={`text-[13px] truncate ${alreadyPicked ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                              <span className={`text-[12.5px] truncate ${alreadyPicked ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
                                 {p}
                               </span>
                               <button
                                 onClick={() => !alreadyPicked && room?.myTurn && !busy && onPick(p)}
                                 disabled={busy || !room?.myTurn || alreadyPicked}
-                                className={`shrink-0 h-8 min-w-[52px] px-2.5 rounded-lg text-[11px] font-medium border transition-colors disabled:cursor-not-allowed ${
+                                className={`shrink-0 h-7 min-w-[48px] px-2 rounded-lg text-[11px] font-medium border transition-colors disabled:cursor-not-allowed ${
                                   pickedByMe
                                     ? 'bg-[#EEEDFE] text-[#3C3489] border-[rgba(127,119,221,0.3)]'
                                     : pickedByOpponent
@@ -566,7 +581,7 @@ export const LiveRoomPage = () => {
           {/* Captain selection */}
           {status === 'CAPTAIN' && (
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-              <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50/70">
+              <div className="px-3 py-2 border-b border-slate-100 bg-slate-50/70">
                 <span className="text-[12.5px] font-medium text-slate-800">Captain selection</span>
               </div>
               <div className="p-3 grid gap-2">

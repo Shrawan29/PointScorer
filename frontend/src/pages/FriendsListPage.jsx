@@ -92,6 +92,33 @@ export const FriendsListPage = () => {
 
   return (
     <Layout>
+      <div className="mb-3 w-full rounded-xl border border-slate-200 bg-slate-100 p-[3px]">
+        <div className="grid w-full grid-cols-2 gap-0.5">
+          <button
+            type="button"
+            onClick={() => setActiveTab(TAB_MANAGE)}
+            className={`h-[32px] w-full inline-flex items-center justify-center rounded-[9px] px-3 text-[12.5px] font-medium transition-colors ${
+              activeTab === TAB_MANAGE
+                ? 'bg-[var(--brand)] text-white'
+                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+            }`}
+          >
+            Manage Friends
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab(TAB_ACTIVE)}
+            className={`h-[32px] w-full inline-flex items-center justify-center rounded-[9px] px-3 text-[12.5px] font-medium transition-colors ${
+              activeTab === TAB_ACTIVE
+                ? 'bg-[var(--brand)] text-white'
+                : 'text-slate-600 hover:bg-white hover:text-slate-900'
+            }`}
+          >
+            Active Friends
+          </button>
+        </div>
+      </div>
+
       <PageHeader
         title="Friends"
         subtitle={
@@ -102,31 +129,6 @@ export const FriendsListPage = () => {
               : 'All friends linked to your account are listed here.'
         }
       />
-
-      <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-[3px]">
-        <button
-          type="button"
-          onClick={() => setActiveTab(TAB_MANAGE)}
-          className={`h-[30px] px-3 inline-flex items-center rounded-[9px] text-[12.5px] font-medium transition-colors ${
-            activeTab === TAB_MANAGE
-              ? 'bg-[var(--brand)] text-white'
-              : 'text-slate-600 hover:bg-white hover:text-slate-900'
-          }`}
-        >
-          Manage Friends
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab(TAB_ACTIVE)}
-          className={`h-[30px] px-3 inline-flex items-center rounded-[9px] text-[12.5px] font-medium transition-colors ${
-            activeTab === TAB_ACTIVE
-              ? 'bg-[var(--brand)] text-white'
-              : 'text-slate-600 hover:bg-white hover:text-slate-900'
-          }`}
-        >
-          Active Friends
-        </button>
-      </div>
 
       {activeTab === TAB_ACTIVE ? <ActiveFriendsPanel /> : null}
 

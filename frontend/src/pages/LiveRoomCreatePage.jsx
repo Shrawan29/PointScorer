@@ -102,7 +102,7 @@ export const LiveRoomCreatePage = () => {
         title="Create Live Room"
         subtitle="Both players must be online and ready."
         actions={
-          <Link to="/live-friends">
+          <Link to="/friends?tab=active">
             <Button variant="secondary">Back</Button>
           </Link>
         }

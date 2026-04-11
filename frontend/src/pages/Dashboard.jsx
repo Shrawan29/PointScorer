@@ -550,7 +550,7 @@ export const DashboardMatches = () => {
                 <div className="text-xs text-slate-700">
                   <div className="font-semibold text-slate-800">How to use (step-by-step)</div>
                   <ol className="mt-1 list-decimal space-y-0.5 pl-4">
-                    <li>Open Active Friends from the header/nav.</li>
+                    <li>Open Friends, then switch to the Active Friends tab.</li>
                     <li>Choose an online linked user and start a live room.</li>
                     <li>Select ruleset and match, then create the room.</li>
                     <li>Both users mark Ready in the room.</li>

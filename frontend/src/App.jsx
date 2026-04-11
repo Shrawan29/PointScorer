@@ -28,7 +28,6 @@ const FriendPublicResultPage = lazy(() => import('./pages/FriendPublicResultPage
 const FriendPublicBreakdownPage = lazy(() => import('./pages/FriendPublicBreakdownPage.jsx'));
 const ChangePasswordPage = lazy(() => import('./pages/ChangePasswordPage.jsx'));
 const RequestPasswordResetPage = lazy(() => import('./pages/RequestPasswordResetPage.jsx'));
-const LiveFriendsPage = lazy(() => import('./pages/LiveFriendsPage.jsx'));
 const LiveRoomCreatePage = lazy(() => import('./pages/LiveRoomCreatePage.jsx'));
 const LiveRoomPage = lazy(() => import('./pages/LiveRoomPage.jsx'));
 
@@ -90,7 +89,7 @@ export const App = () => {
 					<Route path="/matches/:matchId" element={withSuspense(<MatchDetails />)} />
 					<Route path="/select-friend/:matchId" element={withSuspense(<SelectFriend />)} />
 					<Route path="/friends" element={withSuspense(<FriendsListPage />)} />
-					<Route path="/live-friends" element={withSuspense(<LiveFriendsPage />)} />
+					<Route path="/live-friends" element={<Navigate to="/friends?tab=active" replace />} />
 					<Route path="/live-rooms/new/:friendId" element={withSuspense(<LiveRoomCreatePage />)} />
 					<Route path="/live-rooms/:roomId" element={withSuspense(<LiveRoomPage />)} />
 					<Route path="/friends/:friendId" element={withSuspense(<FriendDetailPage />)} />

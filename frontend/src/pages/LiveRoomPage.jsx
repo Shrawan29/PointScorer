@@ -340,7 +340,7 @@ export const LiveRoomPage = () => {
             : 'Live selection in progress'
         }
         actions={
-          <Link to="/live-friends">
+          <Link to="/friends?tab=active">
             <Button variant="secondary">Back</Button>
           </Link>
         }

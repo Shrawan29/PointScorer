@@ -62,6 +62,14 @@ const PublicOnlyRoute = ({ children }) => {
 	return children;
 };
 
+const InviteOnlyRegisterRoute = ({ children }) => {
+	const location = useLocation();
+	const qp = new URLSearchParams(location.search || '');
+	const inviteToken = String(qp.get('invite') || '').trim();
+	if (!inviteToken) return <Navigate to="/login" replace />;
+	return children;
+};
+
 export const App = () => {
 	const location = useLocation();
 	const speedInsightsDsn = import.meta.env.VITE_VERCEL_SPEED_INSIGHTS_DSN;
@@ -76,7 +84,14 @@ export const App = () => {
 			<Routes>
 				<Route path="/" element={<RootRedirect />} />
 				<Route path="/login" element={<PublicOnlyRoute>{withSuspense(<LoginPage />)}</PublicOnlyRoute>} />
-				<Route path="/register" element={<PublicOnlyRoute>{withSuspense(<RegisterPage />)}</PublicOnlyRoute>} />
+				<Route
+					path="/register"
+					element={
+						<PublicOnlyRoute>
+							<InviteOnlyRegisterRoute>{withSuspense(<RegisterPage />)}</InviteOnlyRegisterRoute>
+						</PublicOnlyRoute>
+					}
+				/>
 				<Route path="/request-password-reset" element={<PublicOnlyRoute>{withSuspense(<RequestPasswordResetPage />)}</PublicOnlyRoute>} />
 				<Route path="/friend-view/:token" element={withSuspense(<FriendPublicHomePage />)} />
 				<Route path="/friend-view/:token/sessions/:sessionId/result" element={withSuspense(<FriendPublicResultPage />)} />

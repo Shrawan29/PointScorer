@@ -120,13 +120,19 @@ export const LoginPage = () => {
 				</Link>
 			</div>
           <div className="text-xs text-slate-600 mt-2 text-center">
-            Need an account?{' '}
-            <Link
-              className="font-semibold text-[var(--brand)] underline"
-              to={inviteToken ? `/register?invite=${encodeURIComponent(inviteToken)}` : '/register'}
-            >
-              Register
-            </Link>
+            {inviteToken ? (
+              <>
+                Need an account?{' '}
+                <Link
+                  className="font-semibold text-[var(--brand)] underline"
+                  to={`/register?invite=${encodeURIComponent(inviteToken)}`}
+                >
+                  Register
+                </Link>
+              </>
+            ) : (
+              <>Registration is invite-only. Ask your friend to send a live invite link.</>
+            )}
           </div>
         </Card>
       </div>

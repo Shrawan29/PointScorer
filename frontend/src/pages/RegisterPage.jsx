@@ -1,5 +1,4 @@
-import React, { useMemo, useState } from 'react';
-import { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 import axiosInstance from '../api/axiosInstance.js';
@@ -24,6 +23,13 @@ export const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [invitePreview, setInvitePreview] = useState(null);
   const [invitePreviewError, setInvitePreviewError] = useState('');
+  const canRegisterWithInvite = Boolean(inviteToken && invitePreview && !invitePreview.alreadyLinked && !invitePreviewError);
+
+  useEffect(() => {
+    if (!inviteToken) {
+      navigate('/login', { replace: true });
+    }
+  }, [inviteToken, navigate]);
 
   useEffect(() => {
     if (!inviteToken) {
@@ -61,10 +67,22 @@ export const RegisterPage = () => {
     };
   }, [inviteToken]);
 
+  useEffect(() => {
+    if (!invitePreview?.alreadyLinked) return;
+    const loginPath = inviteToken ? `/login?invite=${encodeURIComponent(inviteToken)}` : '/login';
+    navigate(loginPath, { replace: true });
+  }, [invitePreview, inviteToken, navigate]);
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
+
+    if (!canRegisterWithInvite) {
+      setError('This invite link cannot be used for registration');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -97,30 +115,28 @@ export const RegisterPage = () => {
           <form onSubmit={onSubmit} className="space-y-3">
             {error && <Alert type="error">{error}</Alert>}
             {success && <Alert type="success">{success}</Alert>}
-            {inviteToken ? (
-              <Alert>
-                {invitePreview ? (
-                  <>
-                    Invited by <strong>{invitePreview.hostName || 'User'}</strong>.
-                    Your name is auto-filled from their friend list as <strong>{invitePreview.friendName || name || 'Friend'}</strong>.
-                    {invitePreview.alreadyLinked ? (
-                      <> This invite is already linked to an account. Please login instead.</>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    Register with this invite to link your account.
-                    {invitePreviewError ? <> {invitePreviewError}.</> : null}
-                  </>
-                )}
-              </Alert>
+            <Alert>
+              {invitePreview ? (
+                <>
+                  Invited by <strong>{invitePreview.hostName || 'User'}</strong>.
+                  Your name is auto-filled from their friend list as <strong>{invitePreview.friendName || name || 'Friend'}</strong>.
+                </>
+              ) : invitePreviewError ? (
+                <>This invite is invalid or expired. Please request a new invite link.</>
+              ) : (
+                <>Validating invite link...</>
+              )}
+            </Alert>
+            {canRegisterWithInvite ? (
+              <>
+                <FormField label="Name" value={name} onChange={setName} />
+                <FormField label="Email" value={email} onChange={setEmail} type="email" />
+                <FormField label="Password" value={password} onChange={setPassword} type="password" />
+                <Button type="submit" disabled={loading} fullWidth>
+                  {loading ? 'Creating...' : 'Create account'}
+                </Button>
+              </>
             ) : null}
-            <FormField label="Name" value={name} onChange={setName} />
-            <FormField label="Email" value={email} onChange={setEmail} type="email" />
-            <FormField label="Password" value={password} onChange={setPassword} type="password" />
-            <Button type="submit" disabled={loading} fullWidth>
-              {loading ? 'Creating...' : 'Create account'}
-            </Button>
           </form>
 
           <div className="text-xs text-slate-600 mt-3 text-center">

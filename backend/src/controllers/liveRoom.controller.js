@@ -176,6 +176,7 @@ const resolveParticipantContext = ({ room, userId }) => {
       meUserId: hostUserId,
       counterpartUserId: guestUserId,
       readyField: 'hostReady',
+      lockField: 'hostLocked',
       playersField: 'hostPlayers',
       captainField: 'hostCaptain',
     };
@@ -186,6 +187,7 @@ const resolveParticipantContext = ({ room, userId }) => {
       meUserId: guestUserId,
       counterpartUserId: hostUserId,
       readyField: 'guestReady',
+      lockField: 'guestLocked',
       playersField: 'guestPlayers',
       captainField: 'guestCaptain',
     };
@@ -238,6 +240,9 @@ const getRoomResponse = ({ room, requesterUserId }) => {
   const meReady = Boolean(data?.[context.readyField]);
   const counterpartReadyField = context.readyField === 'hostReady' ? 'guestReady' : 'hostReady';
   const counterpartReady = Boolean(data?.[counterpartReadyField]);
+  const meLocked = Boolean(data?.[context.lockField]);
+  const counterpartLockedField = context.lockField === 'hostLocked' ? 'guestLocked' : 'hostLocked';
+  const counterpartLocked = Boolean(data?.[counterpartLockedField]);
   const presence = presenceForContext(context);
   const expiresAtMs = new Date(data?.expiresAt || 0).getTime();
   const secondsToExpire = expiresAtMs
@@ -250,6 +255,9 @@ const getRoomResponse = ({ room, requesterUserId }) => {
     myTurn: String(data?.turnUserId || '') === String(requesterUserId || ''),
     meReady,
     counterpartReady,
+    meLocked,
+    counterpartLocked,
+    bothLocked: meLocked && counterpartLocked,
     meOnline: presence.meOnline,
     counterpartOnline: presence.counterpartOnline,
     bothOnline: presence.bothOnline,
@@ -535,6 +543,8 @@ export const createLiveRoom = async (req, res, next) => {
       status: 'LOBBY',
       hostReady: false,
       guestReady: false,
+      hostLocked: false,
+      guestLocked: false,
       turnUserId: null,
       hostPlayers: [],
       guestPlayers: [],
@@ -764,6 +774,8 @@ export const setLiveRoomReady = async (req, res, next) => {
     maybeExtendRoomExpiry(room);
 
     room[context.readyField] = Boolean(ready);
+    room.hostLocked = false;
+    room.guestLocked = false;
 
     if (room.hostReady && room.guestReady) {
       room.status = 'DRAFTING';
@@ -829,6 +841,8 @@ export const pickLiveRoomPlayer = async (req, res, next) => {
     }
 
     room[context.playersField] = [...(Array.isArray(room[context.playersField]) ? room[context.playersField] : []), player];
+    room.hostLocked = false;
+    room.guestLocked = false;
 
     const nextHostCount = Array.isArray(room.hostPlayers) ? room.hostPlayers.length : 0;
     const nextGuestCount = Array.isArray(room.guestPlayers) ? room.guestPlayers.length : 0;
@@ -895,6 +909,8 @@ export const selectLiveRoomCaptain = async (req, res, next) => {
     }
 
     room[context.captainField] = captain;
+    room.hostLocked = false;
+    room.guestLocked = false;
 
     if (room.hostCaptain && room.guestCaptain) {
       room.turnUserId = null;
@@ -946,6 +962,8 @@ export const freezeLiveRoom = async (req, res, next) => {
       if (String(room.status) !== 'CAPTAIN') {
         room.status = 'CAPTAIN';
         room.turnUserId = room.hostUserId;
+        room.hostLocked = false;
+        room.guestLocked = false;
         await room.save();
         emitRoomUpdate(room, 'captain-started-lock-pending');
         return res.status(200).json(getRoomResponse({ room, requesterUserId: req.userId }));
@@ -954,8 +972,39 @@ export const freezeLiveRoom = async (req, res, next) => {
       return res.status(409).json({ message: 'Both captains must be selected before locking' });
     }
 
-    await finalizeRoomAndCreateSelection({ room });
-    return res.status(200).json(getRoomResponse({ room, requesterUserId: req.userId }));
+    const lockField = context.lockField;
+    let nextRoom = await LiveRoom.findOneAndUpdate(
+      { _id: room._id, [lockField]: { $ne: true } },
+      { $set: { [lockField]: true } },
+      { new: true }
+    );
+
+    if (!nextRoom) {
+      nextRoom = await LiveRoom.findById(room._id);
+    }
+    if (!nextRoom) {
+      return res.status(404).json({ message: 'Live room not found' });
+    }
+
+    await ensureNotExpiredRoom(nextRoom);
+
+    if (LIVE_TERMINAL_STATES.has(String(nextRoom.status || '').toUpperCase())) {
+      if (String(nextRoom.status || '').toUpperCase() === 'FROZEN') {
+        return res.status(200).json(getRoomResponse({ room: nextRoom, requesterUserId: req.userId }));
+      }
+      return res.status(409).json({ message: `Room is ${String(nextRoom.status || '').toLowerCase()}` });
+    }
+
+    if (!(Boolean(nextRoom.hostLocked) && Boolean(nextRoom.guestLocked))) {
+      if (maybeExtendRoomExpiry(nextRoom)) {
+        await nextRoom.save();
+      }
+      emitRoomUpdate(nextRoom, 'lock-pending-opponent');
+      return res.status(200).json(getRoomResponse({ room: nextRoom, requesterUserId: req.userId }));
+    }
+
+    await finalizeRoomAndCreateSelection({ room: nextRoom });
+    return res.status(200).json(getRoomResponse({ room: nextRoom, requesterUserId: req.userId }));
   } catch (error) {
     next(error);
   }

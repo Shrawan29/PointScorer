@@ -228,6 +228,9 @@ export const LiveRoomPage = () => {
     guestCount <= MAX_TEAM_SIZE;
   const captainRequired = Boolean(room?.captainRequired);
   const captainComplete = !captainRequired || (Boolean(room?.hostCaptain) && Boolean(room?.guestCaptain));
+  const meLocked = Boolean(room?.meLocked);
+  const counterpartLocked = Boolean(room?.counterpartLocked);
+  const bothLocked = Boolean(room?.bothLocked) || (meLocked && counterpartLocked);
   const canLockSelection =
     !isTerminal &&
     draftLockEligible &&
@@ -314,9 +317,11 @@ export const LiveRoomPage = () => {
       setRoom(nextRoom);
       const nextStatus = String(nextRoom?.status || '').toUpperCase();
       if (nextStatus === 'FROZEN') {
-        setInfo('Selection locked and frozen');
+        setInfo('Both locks confirmed. Selection locked and frozen.');
       } else if (nextStatus === 'CAPTAIN') {
         setInfo('Minimum picks reached. Captain selection started.');
+      } else if (nextRoom?.meLocked && !nextRoom?.counterpartLocked) {
+        setInfo('Your lock is confirmed. Waiting for opponent lock.');
       } else {
         setInfo('Lock updated');
       }
@@ -359,6 +364,11 @@ export const LiveRoomPage = () => {
             <div className="text-sm text-slate-800">Your turn: {room?.myTurn ? 'Yes' : 'No'}</div>
             <div className="text-sm text-slate-800">Ready: {room?.meReady ? 'Yes' : 'No'}</div>
             <div className="text-sm text-slate-800">Opponent ready: {room?.counterpartReady ? 'Yes' : 'No'}</div>
+            {!isTerminal && draftLockEligible ? (
+              <div className="text-sm text-slate-800">
+                Locks: You {meLocked ? 'Locked' : 'Pending'} • Opponent {counterpartLocked ? 'Locked' : 'Pending'}
+              </div>
+            ) : null}
             <div className="text-sm text-slate-800">Picks: Host {hostCount}/9 • Guest {guestCount}/9 (lock at 6-9)</div>
             {captainRequired ? (
               <div className="text-sm text-slate-800">
@@ -366,12 +376,18 @@ export const LiveRoomPage = () => {
               </div>
             ) : null}
             {canLockSelection ? (
-              <div className="text-xs text-emerald-700">
+              <div className={`text-xs ${meLocked && !bothLocked ? 'text-amber-700' : 'text-emerald-700'}`}>
                 {captainRequired && !captainComplete
                   ? status === 'CAPTAIN'
                     ? 'Select both captains to enable lock.'
                     : 'You can lock now to move into captain selection.'
-                  : 'Selection is ready to lock.'}
+                  : bothLocked
+                    ? 'Both locks are confirmed. Finalizing selection.'
+                    : meLocked
+                      ? 'Your lock is confirmed. Waiting for opponent lock.'
+                      : counterpartLocked
+                        ? 'Opponent locked. Click Lock to confirm yours.'
+                        : 'Selection is ready to lock. Both users must lock to freeze.'}
               </div>
             ) : null}
             {!isTerminal && typeof room?.secondsToExpire === 'number' ? (
@@ -387,7 +403,7 @@ export const LiveRoomPage = () => {
               <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Button onClick={() => onSetReady(true)} disabled={busy || room?.meReady}>Ready</Button>
                 <Button variant="secondary" onClick={() => onSetReady(false)} disabled={busy || !room?.meReady}>Unready</Button>
-                <Button onClick={onLockSelection} disabled={busy || !canLockSelection}>Lock</Button>
+                <Button onClick={onLockSelection} disabled={busy || !canLockSelection || meLocked}>{meLocked ? 'Locked' : 'Lock'}</Button>
                 <Button variant="danger" onClick={onCancelRoom} disabled={busy}>Cancel</Button>
               </div>
             )}
@@ -440,7 +456,7 @@ export const LiveRoomPage = () => {
                 <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700">
                   {captainRequired
                     ? 'Minimum picks reached. Click Lock to start captain selection now, or continue drafting up to 9 each.'
-                    : 'Minimum picks reached. Click Lock now, or continue drafting up to 9 each.'}
+                    : 'Minimum picks reached. Click Lock when ready (both users must lock), or continue drafting up to 9 each.'}
                 </div>
               ) : null}
 
@@ -513,10 +529,15 @@ export const LiveRoomPage = () => {
               {captainComplete ? (
                 <div className="grid gap-2">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-700">
-                    Captains are selected. Click <strong>Lock</strong> to freeze the selection.
+                    Captains are selected. Both users must click <strong>Lock</strong> to freeze the selection.
                   </div>
-                  <Button onClick={onLockSelection} disabled={busy || !canLockSelection}>
-                    Lock Selection
+                  {!bothLocked ? (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs text-slate-700">
+                      Locks: You {meLocked ? 'Locked' : 'Pending'} • Opponent {counterpartLocked ? 'Locked' : 'Pending'}
+                    </div>
+                  ) : null}
+                  <Button onClick={onLockSelection} disabled={busy || !canLockSelection || meLocked}>
+                    {meLocked ? 'Locked' : 'Lock Selection'}
                   </Button>
                 </div>
               ) : (

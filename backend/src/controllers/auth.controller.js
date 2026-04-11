@@ -41,25 +41,22 @@ export const register = async (req, res, next) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = req.body?.password;
     const inviteToken = normalizeInviteToken(req.body?.inviteToken);
-    const inviteRequired = ENV.INVITE_ONLY_REGISTRATION;
     let invite = null;
 
-    if (inviteRequired && !inviteToken) {
-      return res.status(403).json({ message: 'Registration is invite-only' });
+    if (!inviteToken) {
+      return res.status(403).json({ message: 'Registration requires a valid invite link' });
     }
 
-    if (inviteToken) {
-      invite = await getFriendInviteByToken(inviteToken);
-      if (invite.linkedUserId) {
-        return res.status(409).json({
-          message:
-            'This invite is already linked. Please login with the previously linked account.',
-        });
-      }
+    invite = await getFriendInviteByToken(inviteToken);
+    if (invite.linkedUserId) {
+      return res.status(409).json({
+        message:
+          'This invite is already linked. Please login with the previously linked account.',
+      });
+    }
 
-      if (!name) {
-        name = String(invite?.friendName || '').trim() || 'Friend';
-      }
+    if (!name) {
+      name = String(invite?.friendName || '').trim() || 'Friend';
     }
 
     // Validate input
@@ -81,21 +78,16 @@ export const register = async (req, res, next) => {
       name,
       email,
       password: hashedPassword,
-      canManageFriends: inviteToken
-        ? ENV.GUEST_REGISTRATION_CAN_MANAGE_FRIENDS
-        : true,
+      canManageFriends: ENV.GUEST_REGISTRATION_CAN_MANAGE_FRIENDS,
     });
 
     await user.save();
 
-    let inviteLink = null;
-    if (inviteToken) {
-      const linked = await linkFriendByInviteToken({
-        inviteToken,
-        linkedUserId: user._id,
-      });
-      inviteLink = buildInviteLinkPayload(linked);
-    }
+    const linked = await linkFriendByInviteToken({
+      inviteToken,
+      linkedUserId: user._id,
+    });
+    const inviteLink = buildInviteLinkPayload(linked);
 
     return res.status(201).json({
       message: 'User registered successfully',

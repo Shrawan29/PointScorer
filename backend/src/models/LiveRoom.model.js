@@ -45,6 +45,14 @@ const liveRoomSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    hostLocked: {
+      type: Boolean,
+      default: false,
+    },
+    guestLocked: {
+      type: Boolean,
+      default: false,
+    },
     turnUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

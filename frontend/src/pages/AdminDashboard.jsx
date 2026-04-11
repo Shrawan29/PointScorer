@@ -44,23 +44,25 @@ const toSafeBoolean = (value, fallback = true) => {
 
 const normalizeAdminUser = (rawUser, existingUser = null) => {
   const safeUser = rawUser || {};
+  const normalizedCanManageFriends = toSafeBoolean(
+    safeUser.canManageFriends,
+    toSafeBoolean(existingUser?.canManageFriends, true)
+  );
+  const normalizedMaxFriendsAllowed = toSafeNumber(
+    safeUser.maxFriendsAllowed,
+    toSafeNumber(existingUser?.maxFriendsAllowed, 10)
+  );
 
   return {
     ...(existingUser || {}),
     ...safeUser,
     _id: String(safeUser._id || safeUser.id || existingUser?._id || ''),
-    maxFriendsAllowed: toSafeNumber(
-      safeUser.maxFriendsAllowed,
-      toSafeNumber(existingUser?.maxFriendsAllowed, 10)
-    ),
+    maxFriendsAllowed: normalizedCanManageFriends ? normalizedMaxFriendsAllowed : 0,
     friendsCreatedCount: toSafeNumber(
       safeUser.friendsCreatedCount,
       toSafeNumber(existingUser?.friendsCreatedCount, 0)
     ),
-    canManageFriends: toSafeBoolean(
-      safeUser.canManageFriends,
-      toSafeBoolean(existingUser?.canManageFriends, true)
-    ),
+    canManageFriends: normalizedCanManageFriends,
   };
 };
 
@@ -223,6 +225,12 @@ const AdminDashboard = () => {
   };
 
   const handleUpdateMaxFriends = async (userId) => {
+    const targetUser = users.find((row) => String(row?._id) === String(userId));
+    if (targetUser?.canManageFriends === false) {
+      setError('Guest friend accounts have fixed limit 0');
+      return;
+    }
+
     const parsedFriendsLimit = parseInt(editingFriendsValue, 10);
     if (Number.isNaN(parsedFriendsLimit) || parsedFriendsLimit < 1 || parsedFriendsLimit > 100) {
       setError('Please enter a valid number between 1 and 100');
@@ -538,15 +546,21 @@ const AdminDashboard = () => {
                         <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
                           <div className="text-slate-600">Friend limit</div>
                           <div className="font-semibold text-slate-900">{u.maxFriendsAllowed}</div>
-                          <button
-                            onClick={() => {
-                              setEditingFriendsLimit(u._id);
-                              setEditingFriendsValue(String(u.maxFriendsAllowed));
-                            }}
-                            className="mt-1 rounded-md bg-[var(--brand)] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[var(--brand-strong)]"
-                          >
-                            Edit limit
-                          </button>
+                          {u.canManageFriends === false ? (
+                            <div className="mt-1 rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                              Guest fixed
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingFriendsLimit(u._id);
+                                setEditingFriendsValue(String(u.maxFriendsAllowed));
+                              }}
+                              className="mt-1 rounded-md bg-[var(--brand)] px-2 py-0.5 text-[11px] font-medium text-white hover:bg-[var(--brand-strong)]"
+                            >
+                              Edit limit
+                            </button>
+                          )}
                         </div>
                       )}
 

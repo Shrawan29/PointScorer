@@ -53,6 +53,11 @@ const liveRoomSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    firstTurnUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
     turnUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

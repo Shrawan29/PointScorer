@@ -18,6 +18,7 @@ export const LiveRoomCreatePage = () => {
   const [options, setOptions] = useState(null);
   const [rulesetId, setRulesetId] = useState('');
   const [matchId, setMatchId] = useState('');
+  const [firstTurnBy, setFirstTurnBy] = useState('ME');
 
   const rulesets = useMemo(() => (Array.isArray(options?.rulesets) ? options.rulesets : []), [options]);
   const matches = useMemo(() => (Array.isArray(options?.matches) ? options.matches : []), [options]);
@@ -46,6 +47,7 @@ export const LiveRoomCreatePage = () => {
 
         setRulesetId(defaultRuleset);
         setMatchId(defaultMatch);
+        setFirstTurnBy('ME');
       } catch (err) {
         if (!cancelled) setError(err?.response?.data?.message || 'Failed to load live room options');
       } finally {
@@ -71,6 +73,7 @@ export const LiveRoomCreatePage = () => {
         rulesetId,
         realMatchId: matchId,
         realMatchName: selectedMatch.matchName,
+        firstTurnBy,
       });
 
       const roomId = res?.data?._id;
@@ -170,6 +173,17 @@ export const LiveRoomCreatePage = () => {
                 ))}
               </select>
             )}
+          </Card>
+
+          <Card title="Who Picks First?">
+            <select
+              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-[13px] text-slate-900"
+              value={firstTurnBy}
+              onChange={(e) => setFirstTurnBy(e.target.value)}
+            >
+              <option value="ME">You pick first</option>
+              <option value="OPPONENT">{options.friendName || 'Friend'} picks first</option>
+            </select>
           </Card>
 
           <Button onClick={onCreate} disabled={!canCreate || creating} fullWidth>

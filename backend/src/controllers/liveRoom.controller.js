@@ -89,6 +89,38 @@ const sanitizePlayerName = (value) => {
   return safe;
 };
 
+const normalizeFirstTurnBy = (value) => {
+  const safe = String(value || '').trim().toUpperCase();
+  if (safe === 'OPPONENT' || safe === 'HOST' || safe === 'GUEST') return safe;
+  return 'ME';
+};
+
+const resolveInitialTurnUserId = ({ relation, requesterUserId, firstTurnBy }) => {
+  const requester = String(requesterUserId || '').trim();
+  const hostUserId = String(relation?.hostUserId || '').trim();
+  const guestUserId = String(relation?.guestUserId || '').trim();
+
+  if (firstTurnBy === 'HOST') return hostUserId;
+  if (firstTurnBy === 'GUEST') return guestUserId;
+  if (firstTurnBy === 'OPPONENT') {
+    return requester === hostUserId ? guestUserId : hostUserId;
+  }
+
+  return requester;
+};
+
+const resolveRoomFirstTurnUserId = (room) => {
+  const hostUserId = String(room?.hostUserId || '').trim();
+  const guestUserId = String(room?.guestUserId || '').trim();
+  const firstTurnUserIdRaw = String(room?.firstTurnUserId || '').trim();
+
+  if (firstTurnUserIdRaw === hostUserId || firstTurnUserIdRaw === guestUserId) {
+    return firstTurnUserIdRaw;
+  }
+
+  return hostUserId || null;
+};
+
 const getTeamCounts = (room) => ({
   hostCount: Array.isArray(room?.hostPlayers) ? room.hostPlayers.length : 0,
   guestCount: Array.isArray(room?.guestPlayers) ? room.guestPlayers.length : 0,
@@ -243,6 +275,14 @@ const getRoomResponse = ({ room, requesterUserId }) => {
   const meLocked = Boolean(data?.[context.lockField]);
   const counterpartLockedField = context.lockField === 'hostLocked' ? 'guestLocked' : 'hostLocked';
   const counterpartLocked = Boolean(data?.[counterpartLockedField]);
+  const hostUserId = String(data?.hostUserId || '').trim();
+  const resolvedFirstTurnUserId = resolveRoomFirstTurnUserId(data);
+  const firstTurnMe = Boolean(resolvedFirstTurnUserId) && resolvedFirstTurnUserId === String(requesterUserId || '');
+  const firstTurnRole = resolvedFirstTurnUserId
+    ? resolvedFirstTurnUserId === hostUserId
+      ? 'HOST'
+      : 'GUEST'
+    : null;
   const presence = presenceForContext(context);
   const expiresAtMs = new Date(data?.expiresAt || 0).getTime();
   const secondsToExpire = expiresAtMs
@@ -258,6 +298,9 @@ const getRoomResponse = ({ room, requesterUserId }) => {
     meLocked,
     counterpartLocked,
     bothLocked: meLocked && counterpartLocked,
+    firstTurnUserId: resolvedFirstTurnUserId,
+    firstTurnMe,
+    firstTurnRole,
     meOnline: presence.meOnline,
     counterpartOnline: presence.counterpartOnline,
     bothOnline: presence.bothOnline,
@@ -470,6 +513,7 @@ export const getLiveRoomOptions = async (req, res, next) => {
 export const createLiveRoom = async (req, res, next) => {
   try {
     const { friendId, rulesetId, realMatchId, realMatchName } = req.body || {};
+    const firstTurnBy = normalizeFirstTurnBy(req.body?.firstTurnBy);
     const safeRealMatchId = String(realMatchId || '').trim();
     const safeRealMatchName = String(realMatchName || '').trim();
     if (!friendId || !rulesetId || !safeRealMatchId || !safeRealMatchName) {
@@ -487,6 +531,17 @@ export const createLiveRoom = async (req, res, next) => {
     if (!hostOnline || !guestOnline) {
       return res.status(409).json({ message: 'Both players must be online to create a live room' });
     }
+
+    const requestedFirstTurnUserId = resolveInitialTurnUserId({
+      relation,
+      requesterUserId: req.userId,
+      firstTurnBy,
+    });
+    const safeFirstTurnUserId =
+      String(requestedFirstTurnUserId || '') === String(relation.hostUserId || '') ||
+      String(requestedFirstTurnUserId || '') === String(relation.guestUserId || '')
+        ? String(requestedFirstTurnUserId)
+        : String(req.userId || relation.hostUserId);
 
     const existingRoom = await LiveRoom.findOne({
       hostUserId: relation.hostUserId,
@@ -545,6 +600,7 @@ export const createLiveRoom = async (req, res, next) => {
       guestReady: false,
       hostLocked: false,
       guestLocked: false,
+      firstTurnUserId: safeFirstTurnUserId,
       turnUserId: null,
       hostPlayers: [],
       guestPlayers: [],
@@ -778,8 +834,11 @@ export const setLiveRoomReady = async (req, res, next) => {
     room.guestLocked = false;
 
     if (room.hostReady && room.guestReady) {
+      const preferredFirstTurnUserId = resolveRoomFirstTurnUserId(room);
+
       room.status = 'DRAFTING';
-      room.turnUserId = room.hostUserId;
+      room.turnUserId =
+        preferredFirstTurnUserId || room.hostUserId;
     } else if (String(room.status) !== 'LOBBY') {
       room.status = 'LOBBY';
       room.turnUserId = null;
@@ -850,7 +909,7 @@ export const pickLiveRoomPlayer = async (req, res, next) => {
     if (nextHostCount >= MAX_PLAYERS_PER_TEAM && nextGuestCount >= MAX_PLAYERS_PER_TEAM) {
       if (room.captainRequired) {
         room.status = 'CAPTAIN';
-        room.turnUserId = room.hostUserId;
+        room.turnUserId = resolveRoomFirstTurnUserId(room) || room.hostUserId;
       } else {
         room.turnUserId = null;
       }
@@ -961,7 +1020,7 @@ export const freezeLiveRoom = async (req, res, next) => {
     if (!isCaptainComplete(room)) {
       if (String(room.status) !== 'CAPTAIN') {
         room.status = 'CAPTAIN';
-        room.turnUserId = room.hostUserId;
+        room.turnUserId = resolveRoomFirstTurnUserId(room) || room.hostUserId;
         room.hostLocked = false;
         room.guestLocked = false;
         await room.save();

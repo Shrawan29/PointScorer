@@ -146,12 +146,14 @@ export const LiveRoomPage = () => {
   const [squads, setSquads] = useState(null);
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
+  const [oneMinuteWarning, setOneMinuteWarning] = useState('');
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [captainChoice, setCaptainChoice] = useState('');
   const [liveRealtimeConnected, setLiveRealtimeConnected] = useState(false);
   const [search, setSearch] = useState('');
   const requestedExpiryRefreshRef = useRef(false);
+  const oneMinuteNoticeSentRef = useRef(false);
 
   const countdown = useCountdown(
     typeof room?.secondsToExpire === 'number' ? room.secondsToExpire : undefined,
@@ -277,6 +279,25 @@ export const LiveRoomPage = () => {
     void loadRoom({ silent: true });
   }, [countdown, isTerminal, loadRoom]);
 
+  useEffect(() => {
+    if (isTerminal || typeof countdown !== 'number' || countdown <= 0) {
+      setOneMinuteWarning('');
+      if (isTerminal) oneMinuteNoticeSentRef.current = false;
+      return;
+    }
+
+    if (countdown > 60) {
+      setOneMinuteWarning('');
+      oneMinuteNoticeSentRef.current = false;
+      return;
+    }
+
+    if (oneMinuteNoticeSentRef.current) return;
+
+    oneMinuteNoticeSentRef.current = true;
+    setOneMinuteWarning('Only 1 minute remaining. Finish picks and lock your team before the room ends.');
+  }, [countdown, isTerminal]);
+
   const onSetReady = async (ready) => {
     setBusy(true); setError(''); setInfo('');
     try {
@@ -369,6 +390,11 @@ export const LiveRoomPage = () => {
       </div>
 
       {error ? <Alert type="error">{error}</Alert> : null}
+      {oneMinuteWarning ? (
+        <Alert type="error" autoHide={false} onClose={() => setOneMinuteWarning('')}>
+          {oneMinuteWarning}
+        </Alert>
+      ) : null}
       {info ? <Alert type="success" floating>{info}</Alert> : null}
 
       {loading ? (

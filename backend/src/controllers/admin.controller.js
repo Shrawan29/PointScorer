@@ -127,6 +127,7 @@ export const createUser = async (req, res, next) => {
         isAdmin: user.isAdmin,
         isBlocked: user.isBlocked,
         maxFriendsAllowed: user.maxFriendsAllowed,
+        canManageFriends: user.canManageFriends !== false,
       },
     });
   } catch (error) {
@@ -198,6 +199,7 @@ export const updateUser = async (req, res, next) => {
         isAdmin: user.isAdmin,
         isBlocked: user.isBlocked,
         maxFriendsAllowed: user.maxFriendsAllowed,
+        canManageFriends: user.canManageFriends !== false,
       },
     });
   } catch (error) {
@@ -227,6 +229,7 @@ export const toggleUserBlock = async (req, res, next) => {
         isAdmin: user.isAdmin,
         isBlocked: user.isBlocked,
         maxFriendsAllowed: user.maxFriendsAllowed,
+        canManageFriends: user.canManageFriends !== false,
       },
     });
   } catch (error) {

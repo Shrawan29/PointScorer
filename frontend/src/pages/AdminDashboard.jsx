@@ -37,6 +37,11 @@ const toSafeNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const toSafeBoolean = (value, fallback = true) => {
+  if (typeof value === 'boolean') return value;
+  return fallback;
+};
+
 const normalizeAdminUser = (rawUser, existingUser = null) => {
   const safeUser = rawUser || {};
 
@@ -51,6 +56,10 @@ const normalizeAdminUser = (rawUser, existingUser = null) => {
     friendsCreatedCount: toSafeNumber(
       safeUser.friendsCreatedCount,
       toSafeNumber(existingUser?.friendsCreatedCount, 0)
+    ),
+    canManageFriends: toSafeBoolean(
+      safeUser.canManageFriends,
+      toSafeBoolean(existingUser?.canManageFriends, true)
     ),
   };
 };
@@ -544,6 +553,15 @@ const AdminDashboard = () => {
                       <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
                         <div className="text-slate-600">Friends made</div>
                         <div className="font-semibold text-slate-900">{u.friendsCreatedCount || 0}</div>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-center text-xs">
+                        <div className="text-slate-600">Account type</div>
+                        {u.canManageFriends === false ? (
+                          <div className="font-semibold text-amber-700">Guest Friend</div>
+                        ) : (
+                          <div className="font-semibold text-indigo-700">User</div>
+                        )}
                       </div>
 
                       <div className="text-center px-2 py-1 rounded text-xs font-semibold">

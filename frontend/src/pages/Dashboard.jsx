@@ -15,7 +15,7 @@ const TYPE_ODI = 'ODI';
 const TYPE_TEST = 'TEST';
 const TYPE_IPL = 'IPL';
 const CACHE_TTL_MS = 7200000;
-const DASHBOARD_UPDATE_VERSION = '2026-04-realtime-player-selection-v3';
+const DASHBOARD_UPDATE_VERSION = '2026-04-live-room-updates-v4';
 
 const readCachedMatches = (cacheKey) => {
   const sources = [sessionStorage, localStorage];
@@ -519,9 +519,9 @@ export const DashboardMatches = () => {
           <div className="max-h-[85vh] w-[min(96vw,58rem)] overflow-y-auto rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-3 shadow-xl sm:px-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 space-y-2">
-                <div className="font-semibold text-slate-900">New Update: Realtime Player Selection</div>
+                <div className="font-semibold text-slate-900">New Update: Live Room Improvements</div>
                 <div className="text-sm text-slate-700">
-                  Live turn-by-turn player selection is now enabled for linked users.
+                  Live room flow is now faster and includes clearer match-start and timeout behavior.
                 </div>
 
                 <div className="text-xs text-slate-700">
@@ -531,7 +531,10 @@ export const DashboardMatches = () => {
                     <li>Online/offline visibility in Active Friends</li>
                     <li>Turn-based picking with instant sync for both users</li>
                     <li>Captain round support when enabled by ruleset</li>
-                    <li>Selection lock only when both teams have 6 to 9 players</li>
+                    <li>Room creator can choose who picks first (You or Opponent)</li>
+                    <li>Live room auto-ends after 5 minutes, with a 1-minute remaining warning</li>
+                    <li>Final lock requires confirmation from both users before freeze</li>
+                    <li>Faster loading for create-room and team-building pages</li>
                   </ul>
                 </div>
 
@@ -552,11 +555,11 @@ export const DashboardMatches = () => {
                   <ol className="mt-1 list-decimal space-y-0.5 pl-4">
                     <li>Open Friends, then switch to the Active Friends tab.</li>
                     <li>Choose an online linked user and start a live room.</li>
-                    <li>Select ruleset and match, then create the room.</li>
+                    <li>Select ruleset, match, and who picks first, then create the room.</li>
                     <li>Both users mark Ready in the room.</li>
-                    <li>Pick players turn-by-turn until both teams have 6 to 9 players.</li>
+                    <li>Pick players turn-by-turn before the 5-minute room timer ends.</li>
                     <li>If captain mode is enabled, both users select captains.</li>
-                    <li>Use Lock to freeze and create the final selection session.</li>
+                    <li>Both users press Lock to freeze and create the final selection session.</li>
                   </ol>
                 </div>
 

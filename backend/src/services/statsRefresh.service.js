@@ -8,14 +8,22 @@ import RuleSet from '../models/RuleSet.model.js';
 import { calculatePlayerPoints } from './pointsEngine.service.js';
 import { getCricbuzzMatchStateById, scrapeCricbuzzScorecardPlayerStats } from './scraper.service.js';
 
-const normalizeKey = (value) =>
-	String(value || '')
+const PLAYER_NAME_CANONICAL_ALIASES = new Map([
+	['phil salt', 'philip salt'],
+	['philip salt', 'philip salt'],
+]);
+
+const normalizeKey = (value) => {
+	const normalized = String(value || '')
 		.replace(/[†\u2020]/g, '')
 		.replace(/\([^)]*\)/g, '')
 		.replace(/[,]/g, ' ')
 		.replace(/\s+/g, ' ')
 		.trim()
 		.toLowerCase();
+
+	return PLAYER_NAME_CANONICAL_ALIASES.get(normalized) || normalized;
+};
 
 export const refreshRawStatsFromCricbuzzForSession = async ({ session, selection }) => {
 	if (!session?.realMatchId) {

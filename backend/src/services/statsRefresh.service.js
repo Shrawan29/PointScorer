@@ -11,8 +11,6 @@ import { getCricbuzzMatchStateById, scrapeCricbuzzScorecardPlayerStats } from '.
 const PLAYER_NAME_CANONICAL_ALIASES = new Map([
 	['phil salt', 'philip salt'],
 	['philip salt', 'philip salt'],
-	['nitish reddy', 'nitish kumar reddy'],
-	['nitish kumar reddy', 'nitish kumar reddy'],
 ]);
 
 const normalizeKey = (value) => {
@@ -75,12 +73,22 @@ export const refreshRawStatsFromCricbuzzForSession = async ({ session, selection
 		const byNameId = idByNormalizedName.get(normalizeKey(sel));
 		if (byNameId && scrapedById[byNameId]) return scrapedById[byNameId];
 
-		// 3) Conservative fuzzy fallback: substring match against indexed names
+		// 3) Conservative fuzzy fallback: substring or token-subset match against indexed names
 		const nsel = normalizeKey(sel);
 		if (!nsel) return null;
+		const nselTokens = nsel.split(' ').filter(Boolean);
 		for (const [n, pid] of idByNormalizedName.entries()) {
 			if (n === nsel) return scrapedById[pid] || null;
 			if (n.includes(nsel) || nsel.includes(n)) {
+				if (scrapedById[pid]) return scrapedById[pid];
+			}
+			// Token-subset match: handles middle names ("Nitish Reddy" ↔ "Nitish Kumar Reddy")
+			// Require at least 2 tokens in the shorter name to avoid false positives.
+			const nTokens = n.split(' ').filter(Boolean);
+			const [shorter, longer] = nselTokens.length <= nTokens.length
+				? [nselTokens, nTokens]
+				: [nTokens, nselTokens];
+			if (shorter.length >= 2 && shorter.every((t) => longer.includes(t))) {
 				if (scrapedById[pid]) return scrapedById[pid];
 			}
 		}

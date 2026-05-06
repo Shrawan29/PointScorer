@@ -11,6 +11,8 @@ import { getCricbuzzMatchStateById, scrapeCricbuzzScorecardPlayerStats } from '.
 const PLAYER_NAME_CANONICAL_ALIASES = new Map([
 	['phil salt', 'philip salt'],
 	['philip salt', 'philip salt'],
+	['nitish reddy', 'nitish kumar reddy'],
+	['nitish kumar reddy', 'nitish kumar reddy'],
 ]);
 
 const normalizeKey = (value) => {
